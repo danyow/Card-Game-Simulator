@@ -2,12 +2,18 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
+#if UNITY_IOS
+using Firebase;
+using Firebase.Extensions;
+#endif
 using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
+using System.Text.RegularExpressions;
+using System.Web;
 using CardGameDef;
 using CardGameDef.Unity;
 using Cgs.Menu;
@@ -15,6 +21,9 @@ using UnityEngine;
 using UnityEngine.Events;
 using UnityEngine.SceneManagement;
 using UnityExtensionMethods;
+#if UNITY_ANDROID || UNITY_IOS
+using Firebase.DynamicLinks;
+#endif
 
 [assembly: InternalsVisibleTo("PlayMode")]
 
@@ -23,11 +32,8 @@ namespace Cgs
     public class CardGameManager : MonoBehaviour
     {
         // Show all Debug.Log() to help with debugging?
-        public const bool IsMessengerDebugLogVerbose = false;
+        private const bool IsMessengerDebugLogVerbose = false;
         public const string PlayerPrefsDefaultGame = "DefaultGame";
-        public const string GameUrl = "GameUrl";
-        public const string BranchCallbackErrorMessage = "Branch Callback Error!: ";
-        public const string BranchCallbackWarning = "Branch Callback has GameUrl, but it is not a string?";
         public const string DefaultNameWarning = "Found game with default name. Deleting it.";
         public const string SelectionErrorMessage = "Could not select the card game because it is not recognized!: ";
         public const string DownloadErrorMessage = "Error downloading game!: ";
@@ -46,10 +52,7 @@ namespace Cgs
         public const string DeletePrompt =
             "Deleting a card game also deletes all decks saved for that card game. Are you sure you would like to delete this card game?";
 
-        public const string ShareBranchMessage = "Get CGS for {0}: {1}";
-
-        public const string ShareUrlMessage =
-            "CGS Deep Link Not Found!\nThe AutoUpdate Url for {0} has been copied to your clipboard:\n{1}";
+        public const string ShareDeepLinkMessage = "Get CGS for {0}: {1}";
 
         public const string ShareWarningMessage =
             "Sharing {0} on CGS requires that it be uploaded to the web.\nIf you would like help with this upload, please contact david@finoldigital.com";
@@ -166,7 +169,7 @@ namespace Cgs
 
         private Dialog _messenger;
 
-        private ProgressBar Progress
+        public ProgressBar Progress
         {
             get
             {
@@ -201,6 +204,16 @@ namespace Cgs
             SceneManager.sceneUnloaded += OnSceneUnloaded;
 
             ResetCurrentToDefault();
+
+            Debug.Log("CardGameManager is Awake!");
+        }
+
+        private void Start()
+        {
+#if !UNITY_WEBGL
+            Debug.Log("CardGameManager::Start:CheckDeepLinks");
+            CheckDeepLinks();
+#endif
         }
 
         private void CreateDefaultCardGames()
@@ -227,11 +240,6 @@ namespace Cgs
                 Directory.CreateDirectory(mahjongDirectory);
             File.WriteAllText(mahjongDirectory + "/" + Tags.MahjongJsonFileName, Tags.MahjongJsonFileContent);
             StartCoroutine(UnityFileMethods.SaveUrlToFile(Tags.MahjongCardBackUrl, mahjongDirectory + "/CardBack.png"));
-            string arcmageDirectory = UnityCardGame.GamesDirectoryPath + "/" + Tags.ArcmageDirectoryName;
-            if (!Directory.Exists(arcmageDirectory))
-                Directory.CreateDirectory(arcmageDirectory);
-            File.WriteAllText(arcmageDirectory + "/" + Tags.ArcmageJsonFileName, Tags.ArcmageJsonFileContent);
-            StartCoroutine(UnityFileMethods.SaveUrlToFile(Tags.ArcmageCardBackUrl, arcmageDirectory + "/CardBack.png"));
 #else
             UnityFileMethods.CopyDirectory(Application.streamingAssetsPath, UnityCardGame.GamesDirectoryPath);
 #endif
@@ -290,53 +298,105 @@ namespace Cgs
             OnSceneActions.Clear();
         }
 
-#if (UNITY_ANDROID || UNITY_IOS) && !UNITY_EDITOR
-        public void MobileBranchCallback(Dictionary<string, object> parameters, string error)
+        private void CheckDeepLinks()
         {
-            Debug.Log("Branch.Callback");
-            if (!string.IsNullOrEmpty(error))
+            Debug.Log("Checking Deep Links...");
+#if UNITY_IOS
+            Debug.Log("Should use Firebase Dynamic Links for iOS...");
+            FirebaseApp.CheckAndFixDependenciesAsync().ContinueWithOnMainThread(task =>
             {
-                Debug.LogWarning(BranchCallbackErrorMessage + error);
+                var dependencyStatus = task.Result;
+                if (dependencyStatus != DependencyStatus.Available)
+                {
+                    Debug.LogError("Could not resolve all Firebase dependencies: " + dependencyStatus);
+                    Messenger.Show("Could not resolve all Firebase dependencies: " + dependencyStatus);
+                    return;
+                }
+
+                DynamicLinks.DynamicLinkReceived += OnDynamicLinkReceived;
+                Debug.Log("Using Firebase Dynamic Links for iOS!");
+            });
+#elif UNITY_ANDROID
+            if (string.IsNullOrEmpty(Application.absoluteURL))
+            {
+                DynamicLinks.DynamicLinkReceived += OnDynamicLinkReceived;
+                Debug.Log("Using Firebase Dynamic Links for Android!");
+            }
+#else
+            Application.deepLinkActivated += OnDeepLinkActivated;
+            Debug.Log("Using Native Deep Links!");
+#endif
+
+            if (string.IsNullOrEmpty(Application.absoluteURL))
+            {
+                Debug.Log("No Start Deep Link");
                 return;
             }
 
-            if (!parameters.TryGetValue(GameUrl, out object gameUrlObj))
+            if (!Uri.IsWellFormedUriString(Application.absoluteURL, UriKind.RelativeOrAbsolute))
             {
-                Debug.LogWarning(BranchCallbackWarning);
+                Debug.LogWarning("Start Deep Link malformed: " + Application.absoluteURL);
                 return;
             }
 
-            string gameUrl = gameUrlObj as string;
-            if (!string.IsNullOrEmpty(gameUrl))
-                StartCoroutine(GetCardGame(gameUrl));
+            Debug.Log("Start Deep Link: " + Application.absoluteURL);
+            OnDeepLinkActivated(Application.absoluteURL);
+        }
+
+#if UNITY_ANDROID || UNITY_IOS
+        private void OnDynamicLinkReceived(object sender, EventArgs args)
+        {
+            var dynamicLinkEventArgs = args as ReceivedDynamicLinkEventArgs;
+            var deepLink = dynamicLinkEventArgs?.ReceivedDynamicLink.Url.OriginalString;
+            if (string.IsNullOrEmpty(deepLink))
+            {
+                Debug.LogError("OnDynamicLinkReceived::deepLinkEmpty");
+                Messenger.Show("OnDynamicLinkReceived::deepLinkEmpty");
+            }
             else
-                Debug.LogWarning(BranchCallbackWarning);
+                OnDeepLinkActivated(deepLink);
         }
 #endif
 
-#if (UNITY_STANDALONE_WIN || UNITY_WSA || ENABLE_WINMD_SUPPORT)
-        public void WindowsBranchCallback(BranchSdk.BranchUniversalObject buo, BranchSdk.BranchLinkProperties link,
-            BranchSdk.BranchError error)
+        private void OnDeepLinkActivated(string deepLink)
         {
-            Debug.Log("Branch.Callback");
-            if (error != null && !string.IsNullOrEmpty(error.GetMessage()))
+            var autoUpdateUrl = GetAutoUpdateUrl(deepLink);
+            if (string.IsNullOrEmpty(autoUpdateUrl) || !Uri.IsWellFormedUriString(autoUpdateUrl, UriKind.RelativeOrAbsolute))
             {
-                Debug.LogWarning(BranchCallbackErrorMessage + error);
-                return;
+                Debug.LogError("OnDeepLinkActivated::autoUpdateUrlMalformed: " + deepLink);
+                Messenger.Show("OnDeepLinkActivated::autoUpdateUrlMalformed: " + deepLink);
             }
-
-            if (link?.ControlParams == null || !link.ControlParams.TryGetValue(GameUrl, out string gameUrl))
-            {
-                Debug.LogWarning(BranchCallbackErrorMessage);
-                return;
-            }
-
-            if (!string.IsNullOrEmpty(gameUrl))
-                StartCoroutine(GetCardGame(gameUrl));
             else
-                Debug.LogWarning(BranchCallbackWarning);
+                StartCoroutine(GetCardGame(autoUpdateUrl));
         }
-#endif
+
+        private static string GetAutoUpdateUrl(string deepLink)
+        {
+            Debug.Log("GetAutoUpdateUrl::deepLink: " + deepLink);
+            if (string.IsNullOrEmpty(deepLink) || !Uri.IsWellFormedUriString(deepLink, UriKind.RelativeOrAbsolute))
+            {
+                Debug.LogWarning("GetAutoUpdateUrl::deepLinkMalformed: " + deepLink);
+                return null;
+            }
+
+            if (deepLink.StartsWith(Tags.DynamicLinkUriDomain))
+            {
+                var dynamicLinkUri = new Uri(deepLink);
+                deepLink = HttpUtility.UrlDecode(HttpUtility.ParseQueryString(dynamicLinkUri.Query).Get("link"));
+                Debug.Log("GetAutoUpdateUrl::dynamicLink: " + deepLink);
+                if (string.IsNullOrEmpty(deepLink) || !Uri.IsWellFormedUriString(deepLink, UriKind.RelativeOrAbsolute))
+                {
+                    Debug.LogWarning("GetAutoUpdateUrl::dynamicLinkMalformed: " + deepLink);
+                    return null;
+                }
+            }
+
+            var deepLinkUri = new Uri(deepLink);
+            var autoUpdateUrl = HttpUtility.UrlDecode(HttpUtility.ParseQueryString(deepLinkUri.Query).Get("url"));
+            Debug.Log("GetAutoUpdateUrl::autoUpdateUrl: " + autoUpdateUrl);
+
+            return autoUpdateUrl;
+        }
 
         // Note: Does NOT Reset Game Scene
         internal void ResetCurrentToDefault()
@@ -437,8 +497,8 @@ namespace Cgs
             cardGame ??= Current;
 
             for (int page = cardGame.AllCardsUrlPageCountStartIndex;
-                page < cardGame.AllCardsUrlPageCountStartIndex + cardGame.AllCardsUrlPageCount;
-                page++)
+                 page < cardGame.AllCardsUrlPageCountStartIndex + cardGame.AllCardsUrlPageCount;
+                 page++)
             {
                 cardGame.LoadCards(page);
                 if (page == cardGame.AllCardsUrlPageCountStartIndex &&
@@ -566,9 +626,10 @@ namespace Cgs
         public void Share()
         {
             Debug.Log("CGS Share:: Deep:" + Current.CgsDeepLink + " Auto:" + Current.AutoUpdateUrl);
-            if (Current.CgsDeepLink != null && Current.CgsDeepLink.IsWellFormedOriginalString())
+            if (Current.AutoUpdateUrl != null && Current.AutoUpdateUrl.IsWellFormedOriginalString())
             {
-                string shareMessage = string.Format(ShareBranchMessage, Current.Name, Current.CgsDeepLink);
+                var deepLink = Current.CgsDeepLink?.OriginalString ?? BuildDeepLink();
+                var shareMessage = string.Format(ShareDeepLinkMessage, Current.Name, deepLink);
 #if (UNITY_ANDROID || UNITY_IOS) && !UNITY_EDITOR
                 var nativeShare = new NativeShare();
                 nativeShare.SetText(shareMessage).Share();
@@ -577,16 +638,31 @@ namespace Cgs
                 Messenger.Show(shareMessage);
 #endif
             }
-            else if (Current.AutoUpdateUrl != null && Current.AutoUpdateUrl.IsWellFormedOriginalString())
-            {
-                UniClipboard.SetText(Current.AutoUpdateUrl.ToString());
-                Messenger.Show(string.Format(ShareUrlMessage, Current.Name, Current.AutoUpdateUrl));
-            }
             else
             {
                 Debug.LogWarningFormat(ShareWarningMessage, Current.Name);
                 Messenger.Show(string.Format(ShareWarningMessage, Current.Name));
             }
+        }
+
+        private string BuildDeepLink()
+        {
+            if (Current.AutoUpdateUrl == null || !Current.AutoUpdateUrl.IsWellFormedOriginalString())
+            {
+                Debug.LogErrorFormat(ShareWarningMessage, Current.Name);
+                Messenger.Show(string.Format(ShareWarningMessage, Current.Name));
+                return null;
+            }
+
+            var deepLink = "https://cgs.link/?link=";
+            deepLink += "https://www.cardgamesimulator.com/link?url%3D" + Current.AutoUpdateUrl.OriginalString;
+            deepLink += "&apn=com.finoldigital.cardgamesim&isi=1392877362&ibi=com.finoldigital.CardGameSim";
+            var regex = new Regex("[^a-zA-Z0-9 -]");
+            var encodedName = regex.Replace(Current.Name, "+");
+            deepLink += "&st=Card+Game+Simulator+-+" + encodedName + "&sd=Play+" + encodedName + "+on+CGS!";
+            if (Current.BannerImageUrl != null && Current.BannerImageUrl.IsWellFormedOriginalString())
+                deepLink += "&si=" + Current.BannerImageUrl.OriginalString;
+            return deepLink;
         }
 
         private void LateUpdate()

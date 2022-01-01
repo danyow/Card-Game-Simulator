@@ -1,3 +1,2 @@
-- Fix: Online Play
-- Fix: Desktop File Browser
-- Accessibility: Scale resolution/size of UI in Settings
+- Accessibility: Share Dynamic Links
+- Game-Play: Keep on Top or Move to Bottom of deck

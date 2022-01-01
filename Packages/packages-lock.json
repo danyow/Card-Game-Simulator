@@ -1,5 +1,27 @@
 {
   "dependencies": {
+    "com.google.external-dependency-manager": {
+      "version": "file:../GooglePackages/com.google.external-dependency-manager-1.2.168.tgz",
+      "depth": 0,
+      "source": "local-tarball",
+      "dependencies": {}
+    },
+    "com.google.firebase.app": {
+      "version": "file:../GooglePackages/com.google.firebase.app-8.7.0.tgz",
+      "depth": 0,
+      "source": "local-tarball",
+      "dependencies": {
+        "com.google.external-dependency-manager": "1.2.168"
+      }
+    },
+    "com.google.firebase.dynamic-links": {
+      "version": "file:../GooglePackages/com.google.firebase.dynamic-links-8.7.0.tgz",
+      "depth": 0,
+      "source": "local-tarball",
+      "dependencies": {
+        "com.google.firebase.app": "8.7.0"
+      }
+    },
     "com.unity.2d.sprite": {
       "version": "1.0.0",
       "depth": 0,
@@ -113,6 +135,13 @@
       "source": "git",
       "dependencies": {},
       "hash": "9b1575d6e126b98b79b58c487e8cfd09125d1e3b"
+    },
+    "com.yasirkula.simplefilebrowser": {
+      "version": "https://github.com/yasirkula/UnitySimpleFileBrowser.git",
+      "depth": 0,
+      "source": "git",
+      "dependencies": {},
+      "hash": "333c21cbf0acc31e049bfa4b1e84abb57ed200e2"
     },
     "jillejr.newtonsoft.json-for-unity": {
       "version": "12.0.301",

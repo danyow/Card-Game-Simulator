@@ -13,7 +13,7 @@ on:
   workflow_dispatch:
     inputs:
       workflow_mode:
-        description: 'targetPlatform OR release [targetPlatform]'
+        description: '[release] [Android, iOS, StandaloneOSX, StandaloneLinux64, WebGL, StandaloneWindows, WSAPlayer, StandaloneWindows64, Steam]'
         required: false
         default: ''
 
@@ -49,13 +49,13 @@ jobs:
         run: |
           echo "$RELEASE_NOTES" > fastlane/metadata/android/en-US/changelogs/default.txt
           echo "$RELEASE_NOTES" > fastlane/metadata/en-US/release_notes.txt
-      - name: Auto-Commit Changelog
+      - name: Auto-Commit Release Notes
         if: github.event.action == 'published'
         uses: stefanzweifel/git-auto-commit-action@v4
         with:
           branch: main
-          file_pattern: fastlane/metadata/android/en-US/changelogs/*
-          commit_message: Update Changelog
+          file_pattern: fastlane/metadata
+          commit_message: Update Release Notes
 
   buildWithLinux:
     name: Build for ${{ matrix.targetPlatform }}
@@ -116,13 +116,12 @@ jobs:
         with:
           name: cgs-${{ matrix.targetPlatform }}
           path: build/${{ matrix.targetPlatform }}
-      - name: Zip build/${{ matrix.targetPlatform }}
-        uses: papeloto/action-zip@v1
+      - name: Zip Build
+        uses: montudor/action-zip@v1
         if: github.event.action == 'published' && matrix.targetPlatform == 'StandaloneLinux64'
         with:
-          files: build/${{ matrix.targetPlatform }}/
-          dest: build/cgs-${{ matrix.targetPlatform }}.zip
-      - name: Upload cgs-${{ matrix.targetPlatform }}.zip to GitHub Release
+          args: zip -qq -r build/cgs-${{ matrix.targetPlatform }}.zip build/${{ matrix.targetPlatform }}
+      - name: Upload Zip to GitHub Release
         uses: svenstaro/upload-release-action@v2
         if: github.event.action == 'published' && matrix.targetPlatform == 'StandaloneLinux64'
         with:
@@ -141,7 +140,7 @@ jobs:
       fail-fast: false
       matrix:
         targetPlatform:
-          - StandaloneWindows64
+          - StandaloneWindows
           - WSAPlayer
     steps:
       - name: Checkout Repository
@@ -182,13 +181,13 @@ jobs:
         with:
           name: cgs-${{ matrix.targetPlatform }}
           path: build/${{ matrix.targetPlatform }}
-      - name: Zip build/${{ matrix.targetPlatform }}
-        uses: papeloto/action-zip@v1
+      - name: Zip Build
+        uses: vimtor/action-zip@v1
         if: github.event.action == 'published' && matrix.targetPlatform != 'WSAPlayer'
         with:
           files: build/${{ matrix.targetPlatform }}/
           dest: build/cgs-${{ matrix.targetPlatform }}.zip
-      - name: Upload cgs-${{ matrix.targetPlatform }}.zip to GitHub Release
+      - name: Upload Zip to GitHub Release
         uses: svenstaro/upload-release-action@v2
         if: github.event.action == 'published' && matrix.targetPlatform != 'WSAPlayer'
         with:
@@ -200,10 +199,10 @@ jobs:
           body: ${{ github.event.release.body }}
 
   buildWithWindows2:
-    name: Build for StandaloneWindows
+    name: Build for StandaloneWindows64
     runs-on: windows-latest
     needs: buildWithWindows
-    if: github.event.action == 'published' || contains(github.event.inputs.workflow_mode, 'release') || contains(github.event.inputs.workflow_mode, 'StandaloneWindows') || contains(github.event.inputs.workflow_mode, 'Steam')
+    if: github.event.action == 'published' || contains(github.event.inputs.workflow_mode, 'release') || contains(github.event.inputs.workflow_mode, 'StandaloneWindows64') || contains(github.event.inputs.workflow_mode, 'Steam')
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v2
@@ -228,28 +227,28 @@ jobs:
       - name: Build Unity
         uses: kuler90/build-unity@v1
         with:
-          build-path: build/StandaloneWindows
-          build-target: StandaloneWindows
+          build-path: build/StandaloneWindows64
+          build-target: StandaloneWindows64
           build-method: Cgs.Editor.BuildCgs.BuildOptions
           build-version: ${{ steps.versioning.outputs.version }}
       - name: Upload Build
         uses: actions/upload-artifact@v2
         with:
-          name: cgs-StandaloneWindows
-          path: build/StandaloneWindows
-      - name: Zip build/StandaloneWindows
-        uses: papeloto/action-zip@v1
+          name: cgs-StandaloneWindows64
+          path: build/StandaloneWindows64
+      - name: Zip Build
+        uses: vimtor/action-zip@v1
         if: github.event.action == 'published'
         with:
-          files: build/StandaloneWindows/
-          dest: build/cgs-StandaloneWindows.zip
-      - name: Upload cgs-StandaloneWindows.zip to GitHub Release
+          files: build/StandaloneWindows64/
+          dest: build/cgs-StandaloneWindows64.zip
+      - name: Upload Zip to GitHub Release
         uses: svenstaro/upload-release-action@v2
         if: github.event.action == 'published'
         with:
           repo_token: ${{ secrets.CGS_PAT }}
-          asset_name: cgs-StandaloneWindows.zip
-          file: build/cgs-StandaloneWindows.zip
+          asset_name: cgs-StandaloneWindows64.zip
+          file: build/cgs-StandaloneWindows64.zip
           tag: ${{ github.ref }}
           overwrite: true
           body: ${{ github.event.release.body }}
@@ -315,21 +314,19 @@ jobs:
           APPLE_DEVELOPER_EMAIL: ${{ secrets.APPLE_DEVELOPER_EMAIL }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           APPLE_TEAM_NAME: ${{ secrets.APPLE_TEAM_NAME }}
+          MATCH_URL: ${{ secrets.MATCH_URL }}
+          MATCH_PERSONAL_ACCESS_TOKEN: ${{ secrets.CGS_PAT }}
+          MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
           APPSTORE_KEY_ID: ${{ secrets.APPSTORE_KEY_ID }}
           APPSTORE_ISSUER_ID: ${{ secrets.APPSTORE_ISSUER_ID }}
           APPSTORE_P8: ${{ secrets.APPSTORE_P8 }}
           USYM_UPLOAD_AUTH_TOKEN: ${{ secrets.USYM_UPLOAD_AUTH_TOKEN }}
-          MATCH_DEPLOY_KEY: ${{ secrets.MATCH_DEPLOY_KEY }}
-          MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
-          MATCH_REPOSITORY: finol-digital/certificates
           IOS_APP_ID: com.finoldigital.CardGameSim
           IOS_BUILD_PATH: ${{ format('{0}/build/iOS', github.workspace) }}
           PROJECT_NAME: Card Game Simulator
         run: |
           find $IOS_BUILD_PATH -type f -name "**.sh" -exec chmod +x {} \;
           find $IOS_BUILD_PATH -type f -iname "usymtool" -exec chmod +x {} \;
-          eval "$(ssh-agent -s)"
-          ssh-add - <<< "${MATCH_DEPLOY_KEY}"
           bundle install
           bundle exec fastlane ios release
 
@@ -342,14 +339,13 @@ jobs:
       APPLE_DEVELOPER_EMAIL: ${{ secrets.APPLE_DEVELOPER_EMAIL }}
       APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
       APPLE_TEAM_NAME: ${{ secrets.APPLE_TEAM_NAME }}
-      MAC_APPLICATION_CERTIFICATE: ${{ secrets.MAC_APPLICATION_CERTIFICATE }}
-      MAC_APPLICATION_PASSWORD: ${{ secrets.MAC_APPLICATION_PASSWORD }}
+      APPLE_DISTRIBUTION_CERTIFICATE: ${{ secrets.APPLE_DISTRIBUTION_CERTIFICATE }}
+      APPLE_DISTRIBUTION_PASSWORD: ${{ secrets.APPLE_DISTRIBUTION_PASSWORD }}
       MAC_INSTALLER_CERTIFICATE: ${{ secrets.MAC_INSTALLER_CERTIFICATE }}
       MAC_INSTALLER_PASSWORD: ${{ secrets.MAC_INSTALLER_PASSWORD }}
       APPSTORE_KEY_ID: ${{ secrets.APPSTORE_KEY_ID }}
       APPSTORE_ISSUER_ID: ${{ secrets.APPSTORE_ISSUER_ID }}
       APPSTORE_P8: ${{ secrets. APPSTORE_P8 }}
-      APPSTORE_P8_PATH: ${{ format('{0}/fastlane/p8.json', github.workspace) }}
       MAC_APP_BUNDLE_PATHS: Contents/PlugIns/StandaloneFileBrowser.bundle
       MAC_APP_ID: com.finoldigital.CardGameSimulator
       MAC_BUILD_PATH: ${{ format('{0}/build/StandaloneOSX', github.workspace) }}
@@ -373,7 +369,6 @@ jobs:
           bundle install
           bundle exec fastlane mac fixversion
           find $MAC_BUILD_PATH -type f -name "**.sh" -exec chmod +x {} \;
-          echo "$APPSTORE_P8" > $APPSTORE_P8_PATH
           chmod +x fastlane/sign-mac-build.sh
           ./fastlane/sign-mac-build.sh
       - name: Run Fastlane
@@ -386,11 +381,11 @@ jobs:
           name: Card Game Simulator.app
           path: build/StandaloneOSX/Card Game Simulator.app
       - name: Zip App
-        uses: papeloto/action-zip@v1
+        uses: vimtor/action-zip@v1
         if: github.event.action == 'published'
         with:
           files: build/StandaloneOSX/
-          file: build/cgs-StandaloneOSX.zip
+          dest: build/cgs-StandaloneOSX.zip
       - name: Upload App to GitHub Release
         uses: svenstaro/upload-release-action@v2
         if: github.event.action == 'published'
@@ -403,7 +398,7 @@ jobs:
           body: ${{ github.event.release.body }}
 
   releaseToGitHubPages:
-    name: Release to GitHub Pages
+    name: Release to the Web via GitHub Pages
     runs-on: ubuntu-latest
     needs: buildWithLinux
     if: github.event.action == 'published' || (contains(github.event.inputs.workflow_mode, 'release') && contains(github.event.inputs.workflow_mode, 'WebGL'))
@@ -546,6 +541,10 @@ jobs:
     needs: [buildWithLinux, buildWithWindows, buildWithWindows2, releaseToMacAppStore]
     if: github.event.action == 'published' || (contains(github.event.inputs.workflow_mode, 'release') && contains(github.event.inputs.workflow_mode, 'Steam'))
     steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
       - name: Download StandaloneWindows Artifact
         uses: actions/download-artifact@v2
         with:
@@ -566,37 +565,21 @@ jobs:
         with:
           name: Card Game Simulator.app
           path: build/StandaloneOSX/Card Game Simulator.app
-      - name: Remove BackUpThisFolder_ButDontShipItWithYourGame Folder
-        run: |
-          echo "Cleaning StandaloneWindows..."
-          rm -R build/StandaloneWindows/cgs_BackUpThisFolder_ButDontShipItWithYourGame
-          echo "Cleaned StandaloneWindows! Remains:"
-          ls build/StandaloneWindows
-          echo "Cleaning StandaloneLinux64..."
-          rm -R build/StandaloneLinux64/StandaloneLinux64_BackUpThisFolder_ButDontShipItWithYourGame
-          echo "Cleaned StandaloneLinux64! Remains:"
-          ls build/StandaloneLinux64
-          echo "Cleaning StandaloneWindows64..."
-          rm -R build/StandaloneWindows64/cgs_BackUpThisFolder_ButDontShipItWithYourGame
-          echo "Cleaned StandaloneWindows64! Remains:"
-          ls build/StandaloneWindows64
-          echo "No need to clean StandaloneOSX:"
-          ls build/StandaloneOSX
       - name: Get Version
         id: versioning
         uses: paulhatch/semantic-version@v4.0.2
         with:
           format: "${major}.${minor}.${patch}"
       - name: Deploy to Steam
-        uses: game-ci/steam-deploy@authentication
+        uses: game-ci/steam-deploy@v1
         with:
           username: ${{ secrets.STEAM_USERNAME }}
-          password: ${{ secrets.STEAM_PASSWORD }}
-          configVdf: ${{ secrets.STEAM_CONFIG_VDF}}
+          password:  ${{ secrets.STEAM_PASSWORD }}
+          configVdf: ${{ secrets.STEAM_CONFIG_VDF }}
           ssfnFileName: ${{ secrets.STEAM_SSFN_FILE_NAME }}
           ssfnFileContents: ${{ secrets.STEAM_SSFN_FILE_CONTENTS }}
           appId: 1742850
-          buildDescription: ${{ steps.versioning.outputs.version }}
+          buildDescription: v${{ steps.versioning.outputs.version }}
           rootPath: build
           depot1Path: StandaloneWindows
           depot2Path: StandaloneLinux64
@@ -609,6 +592,10 @@ jobs:
     runs-on: ubuntu-latest
     needs: [releaseToGooglePlay, releaseToAppStore, releaseToMacAppStore, releaseToGitHubPages, releaseToSteam, releaseToMicrosoftStore]
     steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
       - name: Get Version
         id: versioning
         uses: paulhatch/semantic-version@v4.0.2
@@ -621,7 +608,10 @@ jobs:
           VERSION: ${{ steps.versioning.outputs.version }}
           RELEASE_NOTES: ${{ github.event.release.body }}
         run: |
-          export ANNOUNCEMENT="CGS $VERSION is out for release! \n$RELEASE_NOTES"
+          export ANNOUNCEMENT="CGS $VERSION is out for release! $RELEASE_NOTES"
+          ANNOUNCEMENT="${ANNOUNCEMENT//'%'/'%25'}"
+          ANNOUNCEMENT="${ANNOUNCEMENT//$'\n'/'%0A'}"
+          ANNOUNCEMENT="${ANNOUNCEMENT//$'\r'/'%0D'}"
           echo "$ANNOUNCEMENT"
           echo "::set-output name=ANNOUNCEMENT::$ANNOUNCEMENT"
       - name: Discord Announcement

@@ -10,8 +10,8 @@ using System.Linq;
 using CardGameDef;
 using CardGameDef.Unity;
 using Cgs.Menu;
+using Cgs.ScrollRects;
 using JetBrains.Annotations;
-using ScrollRects;
 using TMPro;
 using UnityEngine;
 using UnityEngine.EventSystems;
@@ -151,7 +151,7 @@ namespace Cgs.Decks
             _deckFiles.Clear();
             string[] files = Directory.Exists(CardGameManager.Current.DecksDirectoryPath)
                 ? Directory.GetFiles(CardGameManager.Current.DecksDirectoryPath)
-                : new string[0];
+                : Array.Empty<string>();
             foreach (string file in files)
                 if (GetFileTypeFromPath(file) == CardGameManager.Current.DeckFileType)
                     _deckFiles[file] = GetNameFromPath(file);

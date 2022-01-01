@@ -35,7 +35,7 @@ namespace Cgs.CardGameView.Multiplayer
 
         public bool IsOnline => CgsNetManager.Instance != null && CgsNetManager.Instance.isNetworkActive
                                                                && transform.parent == CgsNetManager.Instance
-                                                                   .playController.playArea.transform;
+                                                                   .playController.playMat.transform;
 
         private bool IsProcessingSecondaryDragAction =>
             PointerDragOffsets.Count > 1
@@ -76,16 +76,17 @@ namespace Cgs.CardGameView.Multiplayer
             get
             {
                 if (string.IsNullOrEmpty(Id) ||
-                    !CardGameManager.Current.Cards.TryGetValue(Id, out UnityCard cardValue))
+                    !CardGameManager.Current.Cards.TryGetValue(Id, out var unityCard))
                     return UnityCard.Blank;
-                return cardValue;
+                return unityCard;
             }
             set
             {
                 Value.UnregisterDisplay(this);
                 Id = value != null ? value.Id : string.Empty;
                 gameObject.name = value != null ? "[" + value.Id + "] " + value.Name : string.Empty;
-                value?.RegisterDisplay(this);
+                if (!isFacedown)
+                    value?.RegisterDisplay(this);
             }
         }
 
@@ -149,7 +150,7 @@ namespace Cgs.CardGameView.Multiplayer
                 PlaceHolder = (RectTransform) placeholder.transform;
                 PlaceHolder.SetParent(_placeHolderCardZone.transform);
                 PlaceHolder.sizeDelta = ((RectTransform) transform).sizeDelta;
-                PlaceHolder.anchoredPosition = Vector2.zero;
+                PlaceHolder.localPosition = Vector2.zero;
             }
         }
 
@@ -206,7 +207,7 @@ namespace Cgs.CardGameView.Multiplayer
             if (IsOnline)
             {
                 if (Vector2.zero != position)
-                    ((RectTransform) transform).anchoredPosition = position;
+                    ((RectTransform) transform).localPosition = position;
                 if (Quaternion.identity != rotation)
                     transform.rotation = rotation;
             }
@@ -311,11 +312,11 @@ namespace Cgs.CardGameView.Multiplayer
                 CardViewer.Instance.IsVisible = false;
         }
 
-        public static void CreateDrag(PointerEventData eventData, GameObject gameObject, Transform transform,
+        public static CardModel CreateDrag(PointerEventData eventData, GameObject gameObject, Transform transform,
             UnityCard value, bool isFacedown, CardZone placeHolderCardZone = null)
         {
-            Vector3 position = transform.position;
-            GameObject newGameObject = Instantiate(gameObject, position, transform.rotation,
+            var position = transform.position;
+            var newGameObject = Instantiate(gameObject, position, transform.rotation,
                 transform.gameObject.FindInParents<Canvas>().transform);
             eventData.pointerPress = newGameObject;
             eventData.pointerDrag = newGameObject;
@@ -328,6 +329,7 @@ namespace Cgs.CardGameView.Multiplayer
             cardModel.DoesCloneOnDrag = false;
             cardModel.PointerDragOffsets[eventData.pointerId] = (Vector2) position - eventData.position;
             cardModel.OnBeginDrag(eventData);
+            return cardModel;
         }
 
         public void OnBeginDrag(PointerEventData eventData)
@@ -480,7 +482,7 @@ namespace Cgs.CardGameView.Multiplayer
                 PlaceHolderCardZone.UpdateLayout(PlaceHolder, targetPosition);
 
             if (IsOnline)
-                CmdUpdatePosition(((RectTransform) transform).anchoredPosition);
+                CmdUpdatePosition(((RectTransform) transform).localPosition);
         }
 
         private void UpdateCardZonePosition(Vector2 targetPosition)
@@ -523,7 +525,7 @@ namespace Cgs.CardGameView.Multiplayer
         public void OnChangePosition(Vector2 oldPosition, Vector2 newPosition)
         {
             if (!hasAuthority)
-                ((RectTransform) transform).anchoredPosition = newPosition;
+                transform.localPosition = newPosition;
         }
 
         private void ParentToCanvas(Vector3 targetPosition)

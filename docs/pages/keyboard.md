@@ -7,26 +7,30 @@ If [your CGS device](index.html#play-anywhere) has a keyboard, you can use these
 
 ## Main Menu
 - **Cancel**: *Esc* - Exit CGS.
-- **Horizontal**/**Vertical**: ARROWS or WASD  - Navigate Main Menu buttons.
+- **Horizontal**/**Vertical**: ARROWS or WASD - Navigate Main Menu buttons.
 - **Page-Vertical/Horizontal**: *PgUp*, *PgDn*, *Home*, *End* or ZXCV - Select previous/next card game.
 - **Sort**: *q* or *j* - Select previous card game.
 - **Filter**: *f* or *\\* - Select next card game.
-- **New**: *e* or *k* - Start Game.
-- **Load**: *r* or *l* - Join Game.
-- **Save**: *t* or *;* - Edit Decks.
-- **Option**: *Delete* or *Backspace* - Explore Cards.
-- **FocusBack**: *\`* or *\[* - Manage Card Games.
-- **FocusNext**: *Tab* or *\]* - Settings.
+- **New**: *e* or *k* - Singleplayer.
+- **Load**: *r* or *l* - Multiplayer.
+- **Save**: *t* or *;* - Deck Editor.
+- **FocusBack**: *\`* or *\[* - Toggle Game Management.
+- **FocusNext**: *Tab* or *\]* - Cards Explorer.
+- **Option**: *Delete* or *Backspace* - Settings.
 - **Submit**: *Enter* - Click on selected button.
 
 ## Play Mode
 - **Cancel**: *Esc* - Back to Main Menu.
-- **Option**: *Delete* - Toggle the Play Mode Menu.
-- **Sort**: *q* - Show/Hide Hand.
+- **Horizontal**: *left*, *right* - Rotate PlayMat 90 degrees.
+- **Page-Vertical/Horizontal**: ZXCV - Zoom/Rotate or Pan PlayMat.
+- **Sort**: *q* - Toggle Zoom/Rotate or Pan PlayMat.
 - **New**: *e* - View rules for current game online.
 - **Load**: *r* - Brings up the Deck Load Menu.
 - **Filter**: *f* - Brings up the Card Search/Filter Menu.
 - **Save**: *t* - Brings up the Dice Menu.
+- **FocusNext**: *Tab* or *\]* - Show/Hide Hand.
+- **FocusBack**: *\`* - Draw.
+- **Option**: *Delete* - Toggle the Play Mode Menu.
 
 ## Card Viewer
 - **Cancel**: *Esc* - Hide the Card Viewer.
@@ -67,7 +71,7 @@ If [your CGS device](index.html#play-anywhere) has a keyboard, you can use these
 - **Option**: *Delete* - No.
 - **Submit**: *Enter* - Yes/Close.
 
-## LAN Lobby
+## Multiplayer Lobby
 - **Cancel**: *Esc* - Cancel.
 - **Vertical**: *down*, *up* - Scroll through sessions.
 - **PageHorizontal**: *Home*, *End* - Toggle between LAN and Internet.
@@ -113,3 +117,6 @@ If [your CGS device](index.html#play-anywhere) has a keyboard, you can use these
 
 ## Settings
 - **Cancel**: *Esc* - Back to Main Menu.
+- **Horizontal**/**Vertical**: ARROWS or WASD - Navigate Settings buttons.
+- **PageVertical**: *PgUp*, *PgDn* - Move the scrollbar.
+- **Submit**: *Enter* - Click on selected button.

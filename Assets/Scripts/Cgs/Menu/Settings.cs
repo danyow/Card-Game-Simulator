@@ -5,6 +5,7 @@
 using System.Collections.Generic;
 using JetBrains.Annotations;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
@@ -27,6 +28,7 @@ namespace Cgs.Menu
             private set => PlayerPrefs.SetInt(PlayerPrefsDeveloperMode, value ? 1 : 0);
         }
 
+        public ScrollRect scrollRect;
         public Dropdown resolutionDropdown;
         public Toggle screenOsControlToggle;
         public Toggle screenAutoRotateToggle;
@@ -71,8 +73,26 @@ namespace Cgs.Menu
 
         private void Update()
         {
-            if (Inputs.IsCancel)
-                BackToMainMenu();
+            if (CardGameManager.Instance.ModalCanvas != null)
+                return;
+
+            if ((Inputs.IsVertical || Inputs.IsHorizontal) && EventSystem.current.currentSelectedGameObject == null)
+                EventSystem.current.SetSelectedGameObject(resolutionDropdown.gameObject);
+            else if (Inputs.IsPageVertical && !Inputs.WasPageVertical)
+                ScrollPage(Inputs.IsPageDown);
+            else if (Inputs.IsCancel)
+            {
+                if (EventSystem.current.currentSelectedGameObject == null)
+                    BackToMainMenu();
+                else if (!EventSystem.current.alreadySelecting)
+                    EventSystem.current.SetSelectedGameObject(null);
+            }
+        }
+
+        private void ScrollPage(bool scrollDown)
+        {
+            scrollRect.verticalNormalizedPosition =
+                Mathf.Clamp01(scrollRect.verticalNormalizedPosition + (scrollDown ? -0.1f : 0.1f));
         }
 
         public void SetResolution(int resolutionIndex)

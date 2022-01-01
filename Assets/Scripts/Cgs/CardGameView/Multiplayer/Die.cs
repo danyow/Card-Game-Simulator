@@ -2,7 +2,6 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-using System.Collections.Generic;
 using JetBrains.Annotations;
 using Mirror;
 using UnityEngine;
@@ -20,7 +19,7 @@ namespace Cgs.CardGameView.Multiplayer
         private const float RollDelay = 0.05f;
 
         public Text valueText;
-        public List<CanvasGroup> buttons;
+        public CanvasGroup buttonsCanvasGroup;
 
         [field: SyncVar] public int Min { get; set; }
 
@@ -63,7 +62,7 @@ namespace Cgs.CardGameView.Multiplayer
         {
             valueText.text = _value.ToString();
             if (Vector2.zero != position)
-                ((RectTransform) transform).anchoredPosition = position;
+                ((RectTransform) transform).localPosition = position;
             if (!NetworkManager.singleton.isNetworkActive || isServer)
                 _rollTime = RollTime;
 
@@ -124,7 +123,7 @@ namespace Cgs.CardGameView.Multiplayer
             var rectTransform = ((RectTransform) transform);
             rectTransform.position = eventData.position - _dragOffset;
             if (NetworkManager.singleton.isNetworkActive)
-                CmdUpdatePosition(rectTransform.anchoredPosition);
+                CmdUpdatePosition(rectTransform.localPosition);
         }
 
         public void OnEndDrag(PointerEventData eventData)
@@ -150,7 +149,7 @@ namespace Cgs.CardGameView.Multiplayer
         [PublicAPI]
         public void OnChangePosition(Vector2 oldValue, Vector2 newValue)
         {
-            ((RectTransform) transform).anchoredPosition = newValue;
+            transform.localPosition = newValue;
         }
 
         [Command(requiresAuthority = false)]
@@ -194,22 +193,16 @@ namespace Cgs.CardGameView.Multiplayer
 
         private void ShowButtons()
         {
-            foreach (CanvasGroup button in buttons)
-            {
-                button.alpha = 1;
-                button.interactable = true;
-                button.blocksRaycasts = true;
-            }
+            buttonsCanvasGroup.alpha = 1;
+            buttonsCanvasGroup.interactable = true;
+            buttonsCanvasGroup.blocksRaycasts = true;
         }
 
         private void HideButtons()
         {
-            foreach (CanvasGroup button in buttons)
-            {
-                button.alpha = 0;
-                button.interactable = false;
-                button.blocksRaycasts = false;
-            }
+            buttonsCanvasGroup.alpha = 0;
+            buttonsCanvasGroup.interactable = false;
+            buttonsCanvasGroup.blocksRaycasts = false;
         }
 
         [Command]

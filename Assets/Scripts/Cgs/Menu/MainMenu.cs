@@ -23,6 +23,8 @@ namespace Cgs.Menu
         public const string TutorialPrompt =
             "If you are new to Card Game Simulator (CGS), you may want to watch the CGS tutorial video.\nGo to the YouTube video?";
 
+        public const string QuitPrompt = "Quit?";
+
         private const string TutorialUrl = "https://youtu.be/PriDuaM6MEk";
 
         private const string PlayerPrefsHasSeenTutorial = "HasSeenTutorial";
@@ -44,6 +46,8 @@ namespace Cgs.Menu
         public GameObject downloadMenuPrefab;
         public GameObject createMenuPrefab;
         public GameObject gameManagement;
+        public GameObject versionInfo;
+        public Text currentGameNameText;
         public Image currentCardImage;
         public Image currentBannerImage;
         public Image previousCardImage;
@@ -52,6 +56,8 @@ namespace Cgs.Menu
 
         // ReSharper disable once NotAccessedField.Global
         public GameObject createButton;
+        // ReSharper disable once NotAccessedField.Global
+        public GameObject editButton;
         public Button joinButton;
         public GameObject quitButton;
         public Text versionText;
@@ -63,10 +69,10 @@ namespace Cgs.Menu
 
         private DownloadMenu _downloader;
 
-        private CreateMenu Creator =>
-            _creator ? _creator : (_creator = Instantiate(createMenuPrefab).GetOrAddComponent<CreateMenu>());
+        private GameCreationMenu Creator =>
+            _creator ? _creator : (_creator = Instantiate(createMenuPrefab).GetOrAddComponent<GameCreationMenu>());
 
-        private CreateMenu _creator;
+        private GameCreationMenu _creator;
 
         private void OnEnable()
         {
@@ -76,6 +82,7 @@ namespace Cgs.Menu
         private void Start()
         {
             createButton.SetActive(Settings.DeveloperMode);
+            editButton.SetActive(Settings.DeveloperMode);
 #if UNITY_WEBGL
             joinButton.interactable = false;
 #endif
@@ -128,9 +135,8 @@ namespace Cgs.Menu
                 else if (Inputs.IsPageRight && !Inputs.WasPageRight)
                     SelectNext();
             }
-            else if (Inputs.IsHorizontal && (EventSystem.current.currentSelectedGameObject == null ||
-                                             EventSystem.current.currentSelectedGameObject ==
-                                             selectableButtons[0].gameObject))
+            else if (Inputs.IsHorizontal && EventSystem.current.currentSelectedGameObject == null ||
+                     EventSystem.current.currentSelectedGameObject == selectableButtons[0].gameObject)
             {
                 if (Inputs.IsLeft && !Inputs.WasLeft)
                     SelectPrevious();
@@ -170,21 +176,26 @@ namespace Cgs.Menu
                 else
                     EditDeck();
             }
+            else if (Inputs.IsFocusBack && !Inputs.WasFocusBack)
+                ToggleGameManagement();
+            else if (Inputs.IsFocusNext && !Inputs.WasFocusNext)
+            {
+                if (gameManagement.activeSelf && editButton.activeSelf)
+                    Edit();
+                else
+                    ExploreCards();
+            }
             else if (Inputs.IsOption)
             {
                 if (gameManagement.activeSelf)
                     Delete();
                 else
-                    ExploreCards();
+                    ShowSettings();
             }
-            else if (Inputs.IsFocusBack && !Inputs.WasFocusBack)
-                ToggleGameManagement();
-            else if (Inputs.IsFocusNext && !Inputs.WasFocusNext)
-                ShowSettings();
             else if (Inputs.IsCancel)
             {
                 if (EventSystem.current.currentSelectedGameObject == null)
-                    Quit();
+                    PromptQuit();
                 else if (!EventSystem.current.alreadySelecting)
                     EventSystem.current.SetSelectedGameObject(null);
             }
@@ -192,6 +203,7 @@ namespace Cgs.Menu
 
         private void ResetGameSelectionCarousel()
         {
+            currentGameNameText.text = CardGameManager.Current.Name;
             currentCardImage.sprite = CardGameManager.Current.CardBackImageSprite;
             currentBannerImage.sprite = CardGameManager.Current.BannerImageSprite;
             previousCardImage.sprite = CardGameManager.Instance.Previous.CardBackImageSprite;
@@ -205,6 +217,8 @@ namespace Cgs.Menu
             if (Time.timeSinceLevelLoad < StartBufferTime)
                 return;
             gameManagement.SetActive(!gameManagement.activeSelf);
+            versionInfo.SetActive(gameManagement.activeSelf);
+            EventSystem.current.SetSelectedGameObject(null);
 #endif
         }
 
@@ -227,6 +241,14 @@ namespace Cgs.Menu
         }
 
         [UsedImplicitly]
+        public void Create()
+        {
+            if (Time.timeSinceLevelLoad < StartBufferTime)
+                return;
+            Creator.Show();
+        }
+
+        [UsedImplicitly]
         public void Download()
         {
             if (Time.timeSinceLevelLoad < StartBufferTime)
@@ -235,11 +257,12 @@ namespace Cgs.Menu
         }
 
         [UsedImplicitly]
-        public void Create()
+        public void Edit()
         {
             if (Time.timeSinceLevelLoad < StartBufferTime)
                 return;
-            Creator.Show();
+            CardGameManager.Instance.Messenger.Show("Edit is Coming Soon!");
+            // TODO: Creator.Edit();
         }
 
         [UsedImplicitly]
@@ -303,7 +326,18 @@ namespace Cgs.Menu
         }
 
         [UsedImplicitly]
-        public void Quit() =>
+        public void PromptQuit()
+        {
+            if (Time.timeSinceLevelLoad < StartBufferTime)
+                return;
+#if UNITY_ANDROID
+            Quit();
+#else
+            CardGameManager.Instance.Messenger.Prompt(QuitPrompt, Quit);
+#endif
+        }
+
+        private void Quit() =>
 #if UNITY_EDITOR
             EditorApplication.isPlaying = false;
 #else
