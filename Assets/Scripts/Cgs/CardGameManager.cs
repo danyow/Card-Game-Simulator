@@ -303,8 +303,8 @@ namespace Cgs
             Debug.Log("Checking Deep Links...");
 #if UNITY_IOS
             Debug.Log("Should use Firebase Dynamic Links for iOS...");
-            Application.deepLinkActivated += OnDeepLinkActivated;/*
-            FirebaseApp.CheckAndFixDependenciesAsync().ContinueWithOnMainThread(task =>
+            Application.deepLinkActivated += OnDeepLinkActivated;
+            /*FirebaseApp.CheckAndFixDependenciesAsync().ContinueWithOnMainThread(task =>
             {
                 var dependencyStatus = task.Result;
                 if (dependencyStatus != DependencyStatus.Available)
@@ -316,7 +316,8 @@ namespace Cgs
 
                 DynamicLinks.DynamicLinkReceived += OnDynamicLinkReceived;
                 Debug.Log("Using Firebase Dynamic Links for iOS!");
-            });*/
+            });
+            return;*/
 #elif UNITY_ANDROID
             if (string.IsNullOrEmpty(Application.absoluteURL))
             {
@@ -362,7 +363,8 @@ namespace Cgs
         private void OnDeepLinkActivated(string deepLink)
         {
             var autoUpdateUrl = GetAutoUpdateUrl(deepLink);
-            if (string.IsNullOrEmpty(autoUpdateUrl) || !Uri.IsWellFormedUriString(autoUpdateUrl, UriKind.RelativeOrAbsolute))
+            if (string.IsNullOrEmpty(autoUpdateUrl) ||
+                !Uri.IsWellFormedUriString(autoUpdateUrl, UriKind.RelativeOrAbsolute))
             {
                 Debug.LogError("OnDeepLinkActivated::autoUpdateUrlMalformed: " + deepLink);
                 Messenger.Show("OnDeepLinkActivated::autoUpdateUrlMalformed: " + deepLink);
@@ -392,8 +394,11 @@ namespace Cgs
                 }
             }
 
-            var deepLinkUri = new Uri(deepLink);
-            var autoUpdateUrl = HttpUtility.UrlDecode(HttpUtility.ParseQueryString(deepLinkUri.Query).Get("url"));
+            var deepLinkDecoded = HttpUtility.UrlDecode(deepLink);
+            Debug.Log("GetAutoUpdateUrl::deepLinkDecoded: " + deepLinkDecoded);
+            var deepLinkUriQuery = new Uri(deepLinkDecoded).Query;
+            Debug.Log("GetAutoUpdateUrl::deepLinkUriQuery: " + deepLinkUriQuery);
+            var autoUpdateUrl = HttpUtility.ParseQueryString(deepLinkUriQuery).Get("url");
             Debug.Log("GetAutoUpdateUrl::autoUpdateUrl: " + autoUpdateUrl);
 
             return autoUpdateUrl;
@@ -656,7 +661,8 @@ namespace Cgs
             }
 
             var deepLink = "https://cgs.link/?link=";
-            deepLink += "https://www.cardgamesimulator.com/link?url%3D" + Current.AutoUpdateUrl.OriginalString;
+            deepLink += "https://www.cardgamesimulator.com/link?url%3D" +
+                        HttpUtility.UrlEncode(HttpUtility.UrlEncode(Current.AutoUpdateUrl.OriginalString));
             deepLink += "&apn=com.finoldigital.cardgamesim&isi=1392877362&ibi=com.finoldigital.CardGameSim";
             var regex = new Regex("[^a-zA-Z0-9 -]");
             var encodedName = regex.Replace(Current.Name, "+");
