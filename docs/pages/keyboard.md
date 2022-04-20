@@ -27,7 +27,7 @@ If [your CGS device](index.html#play-anywhere) has a keyboard, you can use these
 - **New**: *e* - View rules for current game online.
 - **Load**: *r* - Brings up the Deck Load Menu.
 - **Filter**: *f* - Brings up the Card Search/Filter Menu.
-- **Save**: *t* - Brings up the Dice Menu.
+- **Save**: *t* - Create dice.
 - **FocusNext**: *Tab* or *\]* - Show/Hide Hand.
 - **FocusBack**: *\`* - Draw.
 - **Option**: *Delete* - Toggle the Play Mode Menu.
@@ -37,6 +37,7 @@ If [your CGS device](index.html#play-anywhere) has a keyboard, you can use these
 - **Focus**: *\`* or *Tab* - Cycle previous/next properties in Card Viewer.
 - **Option**: *Delete* - Zoom on selected card.
 - **Filter**: *f* - Flip card face.
+- **New**: *r* - Move card.
 - **Load**: *r* - Rotate card.
 - **Save**: *t* - Toggle card rotation.
 - **Submit**: *Enter* - Double-click on selected card.
@@ -100,10 +101,6 @@ If [your CGS device](index.html#play-anywhere) has a keyboard, you can use these
 - **Save**: *t* - Creates a printable pdf of the deck.
 - **Submit**: *Enter* - Save.
 
-## Dice Menu
-- **Cancel**: *Esc* - Cancel.
-- **Submit**: *Enter* - Create dice.
-
 ## Card Search/Filter Menu
 - **Cancel**: *Esc* - Cancel.
 - **FocusBack**: *\`* - Focuses keyboard to the previous text input field.
@@ -119,4 +116,5 @@ If [your CGS device](index.html#play-anywhere) has a keyboard, you can use these
 - **Cancel**: *Esc* - Back to Main Menu.
 - **Horizontal**/**Vertical**: ARROWS or WASD - Navigate Settings buttons.
 - **PageVertical**: *PgUp*, *PgDn* - Move the scrollbar.
+- **Option**: *Delete* - Open a web browser to this website.
 - **Submit**: *Enter* - Click on selected button.

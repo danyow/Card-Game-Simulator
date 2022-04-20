@@ -13,8 +13,34 @@ namespace Cgs.Menu
 {
     public class Settings : MonoBehaviour
     {
+#if UNITY_IOS || UNITY_ANDROID
+        private const int DefaultButtonTooltipsEnabled = 0;
+#else
+        private const int DefaultButtonTooltipsEnabled = 1;
+#endif
+
+#if UNITY_IOS || UNITY_ANDROID
+        private const int DefaultPreviewOnMouseOver = 0;
+#else
+        private const int DefaultPreviewOnMouseOver = 1;
+#endif
+
+        private const string PlayerPrefsButtonTooltipsEnabled = "ButtonTooltipsEnabled";
+        private const string PlayerPrefsPreviewOnMouseOver = "PreviewOnMouseOver";
         private const string PlayerPrefsHideReprints = "HideReprints";
         private const string PlayerPrefsDeveloperMode = "DeveloperMode";
+
+        public static bool ButtonTooltipsEnabled
+        {
+            get => PlayerPrefs.GetInt(PlayerPrefsButtonTooltipsEnabled, DefaultButtonTooltipsEnabled) == 1;
+            private set => PlayerPrefs.SetInt(PlayerPrefsButtonTooltipsEnabled, value ? 1 : 0);
+        }
+
+        public static bool PreviewOnMouseOver
+        {
+            get => PlayerPrefs.GetInt(PlayerPrefsPreviewOnMouseOver, DefaultPreviewOnMouseOver) == 1;
+            private set => PlayerPrefs.SetInt(PlayerPrefsPreviewOnMouseOver, value ? 1 : 0);
+        }
 
         public static bool HideReprints
         {
@@ -29,18 +55,22 @@ namespace Cgs.Menu
         }
 
         public ScrollRect scrollRect;
+        public Dropdown framerateDropdown;
         public Dropdown resolutionDropdown;
         public Toggle screenOsControlToggle;
         public Toggle screenAutoRotateToggle;
         public Toggle screenPortraitToggle;
         public Toggle screenLandscapeToggle;
         public Toggle controllerLockToLandscapeToggle;
+        public Toggle buttonTooltipsEnabledToggle;
+        public Toggle previewOnMouseOverToggle;
         public Toggle hideReprintsToggle;
         public Toggle developerModeToggle;
         public List<Transform> orientationOptions;
 
         private void Start()
         {
+            framerateDropdown.value = FrameRateManager.FrameRateIndex;
             resolutionDropdown.value = ResolutionManager.ResolutionIndex;
 
             switch (ScreenOrientationManager.PreferredScreenOrientation)
@@ -63,10 +93,12 @@ namespace Cgs.Menu
             }
 
             controllerLockToLandscapeToggle.isOn = ScreenOrientationManager.DoesControllerLockToLandscape;
+            previewOnMouseOverToggle.isOn = PreviewOnMouseOver;
+            buttonTooltipsEnabledToggle.isOn = ButtonTooltipsEnabled;
             hideReprintsToggle.isOn = HideReprints;
             developerModeToggle.isOn = DeveloperMode;
 #if !UNITY_ANDROID && !UNITY_IOS
-            foreach (Transform option in orientationOptions)
+            foreach (var option in orientationOptions)
                 option.gameObject.SetActive(false);
 #endif
         }
@@ -77,9 +109,11 @@ namespace Cgs.Menu
                 return;
 
             if ((Inputs.IsVertical || Inputs.IsHorizontal) && EventSystem.current.currentSelectedGameObject == null)
-                EventSystem.current.SetSelectedGameObject(resolutionDropdown.gameObject);
+                EventSystem.current.SetSelectedGameObject(framerateDropdown.gameObject);
             else if (Inputs.IsPageVertical && !Inputs.WasPageVertical)
                 ScrollPage(Inputs.IsPageDown);
+            else if (Inputs.IsOption)
+                GoToWebsite();
             else if (Inputs.IsCancel)
             {
                 if (EventSystem.current.currentSelectedGameObject == null)
@@ -95,6 +129,13 @@ namespace Cgs.Menu
                 Mathf.Clamp01(scrollRect.verticalNormalizedPosition + (scrollDown ? -0.1f : 0.1f));
         }
 
+        [UsedImplicitly]
+        public void SetFramerate(int framerateIndex)
+        {
+            FrameRateManager.FrameRateIndex = framerateIndex;
+        }
+
+        [UsedImplicitly]
         public void SetResolution(int resolutionIndex)
         {
             ResolutionManager.ResolutionIndex = resolutionIndex;
@@ -135,6 +176,18 @@ namespace Cgs.Menu
         }
 
         [UsedImplicitly]
+        public void SetButtonTooltipsEnabled(bool buttonTooltipsEnabled)
+        {
+            ButtonTooltipsEnabled = buttonTooltipsEnabled;
+        }
+
+        [UsedImplicitly]
+        public void SetPreviewOnMouseOver(bool previewOnMouseOver)
+        {
+            PreviewOnMouseOver = previewOnMouseOver;
+        }
+
+        [UsedImplicitly]
         public void SetHideReprints(bool hideReprints)
         {
             HideReprints = hideReprints;
@@ -144,6 +197,12 @@ namespace Cgs.Menu
         public void SetDeveloperMode(bool developerMode)
         {
             DeveloperMode = developerMode;
+        }
+
+        [UsedImplicitly]
+        public void GoToWebsite()
+        {
+            Application.OpenURL(Tags.CgsWebsite);
         }
 
         [UsedImplicitly]

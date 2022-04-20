@@ -31,17 +31,27 @@ namespace Cgs.Play.Multiplayer
 
         public int DefaultRotation { get; private set; }
 
-        public string HandCount => HandCards.Count > 0 && CurrentHand >= 0 && CurrentHand < HandCards.Count
-            ? HandCards[CurrentHand].Count.ToString()
-            : string.Empty;
+        public string GetHandCount()
+        {
+            var handCards = GetHandCards();
+            return handCards.Count > 0 && CurrentHand >= 0 && CurrentHand < handCards.Count
+                ? handCards[CurrentHand].Count.ToString()
+                : string.Empty;
+        }
 
-        public IReadOnlyList<IReadOnlyList<UnityCard>> HandCards => _handCards.Select(hand =>
-                hand.Select(cardId => CardGameManager.Current.Cards[cardId]).ToList())
-            .Cast<IReadOnlyList<UnityCard>>().ToList();
+        public IReadOnlyList<IReadOnlyList<UnityCard>> GetHandCards()
+        {
+            return _handCards.Select(hand =>
+                    hand.Select(cardId => CardGameManager.Current.Cards[cardId]).ToList())
+                .Cast<IReadOnlyList<UnityCard>>().ToList();
+        }
 
         private readonly SyncList<string[]> _handCards = new SyncList<string[]>();
 
-        public IReadOnlyList<string> HandNames => _handNames.Select(handName => handName).ToList();
+        public IReadOnlyList<string> GetHandNames()
+        {
+            return _handNames.Select(handName => handName).ToList();
+        }
 
         private readonly SyncList<string> _handNames = new SyncList<string>();
 
@@ -60,6 +70,7 @@ namespace Cgs.Play.Multiplayer
                 CgsNetManager.Instance.playController.ShowDeckMenu();
             else
                 RequestCardGameSelection();
+
             Debug.Log("[CgsNet Player] Started local player!");
         }
 
@@ -73,7 +84,6 @@ namespace Cgs.Play.Multiplayer
         private void CmdSelectCardGame()
         {
             Debug.Log("[CgsNet Player] Sending game id...");
-            Points = CardGameManager.Current.GameStartPointsCount;
             TargetSelectCardGame(CardGameManager.Current.Id, CardGameManager.Current.AutoUpdateUrl?.OriginalString);
         }
 
@@ -202,9 +212,9 @@ namespace Cgs.Play.Multiplayer
         private void CmdCreateCardStack(string stackName, string[] cardIds, bool isDeck, Vector2 position)
         {
             Debug.Log($"[CgsNet Player] Creating new card stack {stackName}...");
-            CardStack stack = CgsNetManager.Instance.playController.CreateCardStack(stackName,
+            var cardStack = CgsNetManager.Instance.playController.CreateCardStack(stackName,
                 cardIds.Select(cardId => CardGameManager.Current.Cards[cardId]).ToList(), position);
-            GameObject stackGameObject = stack.gameObject;
+            var stackGameObject = cardStack.gameObject;
             NetworkServer.Spawn(stackGameObject);
             if (isDeck)
                 CurrentDeck = stackGameObject;
@@ -248,27 +258,19 @@ namespace Cgs.Play.Multiplayer
             cardStack.DoShuffle();
         }
 
-        public void RequestInsert(GameObject stack, int index, string cardId, bool prompt = false)
+        public void RequestInsert(GameObject stack, int index, string cardId)
         {
             Debug.Log($"[CgsNet Player] Requesting insert {cardId} at {index}...");
-            CmdInsert(stack, index, cardId, prompt);
+            CmdInsert(stack, index, cardId);
         }
 
         [Command]
         // ReSharper disable once MemberCanBeMadeStatic.Local
-        private void CmdInsert(GameObject stack, int index, string cardId, bool prompt)
+        private void CmdInsert(GameObject stack, int index, string cardId)
         {
             Debug.Log($"[CgsNet Player] Insert {cardId} at {index}!");
             var cardStack = stack.GetComponent<CardStack>();
             cardStack.Insert(index, cardId);
-            if (prompt)
-                TargetPromptMoveToBottom(stack);
-        }
-
-        [TargetRpc]
-        private void TargetPromptMoveToBottom(GameObject stack)
-        {
-            stack.GetComponent<CardStack>().PromptMoveToBottom();
         }
 
         public void RequestRemoveAt(GameObject stack, int index)
@@ -365,7 +367,7 @@ namespace Cgs.Play.Multiplayer
         [Command]
         private void CmdSyncHand(int handIndex, string[] cardIds)
         {
-            Debug.Log($"[CgsNet Player] Sync hand {handIndex} to {cardIds.Length}!");
+            Debug.Log($"[CgsNet Player] Sync hand {handIndex} to {cardIds.Length} cards on Server!");
             if (handIndex < 0 || handIndex >= _handCards.Count)
             {
                 Debug.LogError($"[CgsNet Player] {handIndex} is out of bounds of {_handCards.Count}");
@@ -373,6 +375,15 @@ namespace Cgs.Play.Multiplayer
             }
 
             _handCards[handIndex] = cardIds;
+            TargetSyncHand(handIndex, cardIds);
+        }
+
+        [TargetRpc]
+        // ReSharper disable once MemberCanBeMadeStatic.Local
+        private void TargetSyncHand(int handIndex, string[] cardIds)
+        {
+            Debug.Log($"[CgsNet Player] Sync hand {handIndex} to {cardIds.Length} cards on client!");
+            CgsNetManager.Instance.playController.drawer.SyncHand(handIndex, cardIds);
         }
 
         #endregion
@@ -381,8 +392,9 @@ namespace Cgs.Play.Multiplayer
 
         public void MoveCardToServer(CardZone cardZone, CardModel cardModel)
         {
-            Transform cardModelTransform = cardModel.transform;
+            var cardModelTransform = cardModel.transform;
             cardModelTransform.SetParent(cardZone.transform);
+            cardModel.SnapToGrid();
             cardModel.position = ((RectTransform) cardModelTransform).localPosition;
             cardModel.rotation = cardModelTransform.rotation;
             CmdSpawnCard(cardModel.Id, cardModel.position, cardModel.rotation, cardModel.isFacedown);
@@ -395,15 +407,15 @@ namespace Cgs.Play.Multiplayer
         // ReSharper disable once MemberCanBeMadeStatic.Local
         private void CmdSpawnCard(string cardId, Vector3 position, Quaternion rotation, bool isFacedown)
         {
-            PlayController controller = CgsNetManager.Instance.playController;
-            GameObject newCard = Instantiate(controller.cardModelPrefab, controller.playMat.transform);
-            var cardModel = newCard.GetComponent<CardModel>();
+            var playController = CgsNetManager.Instance.playController;
+            var newCardGameObject = Instantiate(playController.cardModelPrefab, playController.playMat.transform);
+            var cardModel = newCardGameObject.GetComponent<CardModel>();
             cardModel.Value = CardGameManager.Current.Cards[cardId];
             cardModel.position = position;
             cardModel.rotation = rotation;
             cardModel.isFacedown = isFacedown;
             PlayController.SetPlayActions(cardModel);
-            NetworkServer.Spawn(newCard);
+            NetworkServer.Spawn(newCardGameObject);
             cardModel.RpcHideHighlight();
         }
 
@@ -428,7 +440,7 @@ namespace Cgs.Play.Multiplayer
         // ReSharper disable once MemberCanBeMadeStatic.Local
         private void CmdCreateDie(int min, int max)
         {
-            Die die = CgsNetManager.Instance.playController.CreateDie(min, max);
+            var die = CgsNetManager.Instance.playController.CreateDie(min, max);
             NetworkServer.Spawn(die.gameObject);
         }
 

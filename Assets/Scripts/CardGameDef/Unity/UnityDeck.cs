@@ -13,7 +13,6 @@ using Didstopia.PDFSharp;
 using Didstopia.PDFSharp.Drawing;
 using Didstopia.PDFSharp.Pdf;
 using MigraDocCore.DocumentObjectModel.MigraDoc.DocumentObjectModel.Shapes;
-
 #endif
 
 namespace CardGameDef.Unity
@@ -50,7 +49,7 @@ namespace CardGameDef.Unity
             if (string.IsNullOrEmpty(deckText))
                 return deck;
 
-            foreach (string line in deckText.Split('\n').Select(x => x.Trim()))
+            foreach (var line in deckText.Split('\n').Select(x => x.Trim()))
             {
                 switch (deckFileType)
                 {
@@ -86,13 +85,13 @@ namespace CardGameDef.Unity
                 return;
 
             var cardCount = 1;
-            List<string> tokens = line.Split(' ').ToList();
+            var tokens = line.Split(' ').ToList();
             if (tokens.Count > 0 && int.TryParse(tokens[0], out cardCount))
                 tokens.RemoveAt(0);
-            string cardName = tokens.Count > 0 ? string.Join(" ", tokens.ToArray()) : string.Empty;
-            IEnumerable<UnityCard> cards =
+            var cardName = tokens.Count > 0 ? string.Join(" ", tokens.ToArray()) : string.Empty;
+            var cards =
                 ((UnityCardGame) SourceGame).FilterCards(new CardSearchFilters() {Name = cardName});
-            foreach (UnityCard card in cards)
+            foreach (var card in cards)
             {
                 if (!string.Equals(card.Name, cardName, StringComparison.OrdinalIgnoreCase))
                     continue;
@@ -113,26 +112,26 @@ namespace CardGameDef.Unity
                 return;
             }
 
-            byte[] bytes = Convert.FromBase64String(line);
+            var bytes = Convert.FromBase64String(line);
             ulong offset = 3;
 
-            var heroesCount = (int) Varint.Read(bytes, ref offset, out int _);
+            var heroesCount = (int) Varint.Read(bytes, ref offset, out _);
             for (var i = 0; i < heroesCount; i++)
-                AddCardsByPropertyInt(SourceGame.DeckFileAltId, (int) Varint.Read(bytes, ref offset, out int _), 1);
+                AddCardsByPropertyInt(SourceGame.DeckFileAltId, (int) Varint.Read(bytes, ref offset, out _), 1);
 
-            var singleCardsCount = (int) Varint.Read(bytes, ref offset, out int _);
+            var singleCardsCount = (int) Varint.Read(bytes, ref offset, out _);
             for (var i = 0; i < singleCardsCount; i++)
-                AddCardsByPropertyInt(SourceGame.DeckFileAltId, (int) Varint.Read(bytes, ref offset, out int _), 1);
+                AddCardsByPropertyInt(SourceGame.DeckFileAltId, (int) Varint.Read(bytes, ref offset, out _), 1);
 
-            var doubleCardsCount = (int) Varint.Read(bytes, ref offset, out int _);
+            var doubleCardsCount = (int) Varint.Read(bytes, ref offset, out _);
             for (var i = 0; i < doubleCardsCount; i++)
-                AddCardsByPropertyInt(SourceGame.DeckFileAltId, (int) Varint.Read(bytes, ref offset, out int _), 2);
+                AddCardsByPropertyInt(SourceGame.DeckFileAltId, (int) Varint.Read(bytes, ref offset, out _), 2);
 
-            var multiCardsCount = (int) Varint.Read(bytes, ref offset, out int _);
+            var multiCardsCount = (int) Varint.Read(bytes, ref offset, out _);
             for (var i = 0; i < multiCardsCount; i++)
             {
-                var id = (int) Varint.Read(bytes, ref offset, out int _);
-                var count = (int) Varint.Read(bytes, ref offset, out int _);
+                var id = (int) Varint.Read(bytes, ref offset, out _);
+                var count = (int) Varint.Read(bytes, ref offset, out _);
                 AddCardsByPropertyInt(SourceGame.DeckFileAltId, id, count);
             }
 
@@ -141,7 +140,7 @@ namespace CardGameDef.Unity
 
         private void AddCardsByPropertyInt(string propertyName, int propertyValue, int count)
         {
-            UnityCard card = ((UnityCardGame) SourceGame).Cards.Values.FirstOrDefault(currCard =>
+            var card = ((UnityCardGame) SourceGame).Cards.Values.FirstOrDefault(currCard =>
                 currCard.GetPropertyValueInt(propertyName) == propertyValue);
             for (var i = 0; card != null && i < count; i++)
                 _cards.Add(card);
@@ -149,7 +148,7 @@ namespace CardGameDef.Unity
 
         private void AddCardsByPropertyString(string propertyName, string propertyValue, int count)
         {
-            UnityCard card = ((UnityCardGame) SourceGame).Cards.Values.FirstOrDefault(currCard =>
+            var card = ((UnityCardGame) SourceGame).Cards.Values.FirstOrDefault(currCard =>
                 currCard.GetPropertyValueString(propertyName).Equals(propertyValue));
             for (var i = 0; card != null && i < count; i++)
                 _cards.Add(card);
@@ -166,12 +165,12 @@ namespace CardGameDef.Unity
                 return;
             }
 
-            List<CardCodeAndCount> cardCodeAndCounts = LoRDeckEncoder.GetDeckFromCode(line);
-            foreach (CardCodeAndCount cardCount in cardCodeAndCounts)
+            var cardCodeAndCounts = LoRDeckEncoder.GetDeckFromCode(line);
+            foreach (var cardCodeAndCount in cardCodeAndCounts)
             {
-                if (!((UnityCardGame) SourceGame).Cards.TryGetValue(cardCount.CardCode, out UnityCard card))
+                if (!((UnityCardGame) SourceGame).Cards.TryGetValue(cardCodeAndCount.CardCode, out var card))
                     continue;
-                for (var i = 0; i < cardCount.Count; i++)
+                for (var i = 0; i < cardCodeAndCount.Count; i++)
                     _cards.Add(card);
             }
         }
@@ -191,12 +190,12 @@ namespace CardGameDef.Unity
                 return;
 
             var cardCount = 1;
-            string cardName = line;
+            var cardName = line;
             var cardId = string.Empty;
             var cardSet = string.Empty;
             if (line.Contains(" "))
             {
-                List<string> tokens = line.Split(' ').ToList();
+                var tokens = line.Split(' ').ToList();
                 if (tokens.Count > 0 &&
                     int.TryParse(
                         (tokens[0].StartsWith("x") || tokens[0].EndsWith("x")) ? tokens[0].Replace("x", "") : tokens[0],
@@ -212,7 +211,7 @@ namespace CardGameDef.Unity
                 if (tokens.Count > 0 && tokens[tokens.Count - 1].StartsWith("(") &&
                     tokens[tokens.Count - 1].EndsWith(")"))
                 {
-                    string inParens = tokens[tokens.Count - 1].Substring(1, tokens[tokens.Count - 1].Length - 2);
+                    var inParens = tokens[tokens.Count - 1].Substring(1, tokens[tokens.Count - 1].Length - 2);
                     if (((UnityCardGame) SourceGame).Sets.ContainsKey(inParens))
                     {
                         cardSet = inParens;
@@ -223,9 +222,9 @@ namespace CardGameDef.Unity
                 cardName = tokens.Count > 0 ? string.Join(" ", tokens.ToArray()) : string.Empty;
             }
 
-            IEnumerable<UnityCard> cards = ((UnityCardGame) SourceGame).FilterCards(new CardSearchFilters()
+            var cards = ((UnityCardGame) SourceGame).FilterCards(new CardSearchFilters()
                 {Id = cardId, Name = cardName, SetCode = cardSet});
-            foreach (UnityCard card in cards)
+            foreach (var card in cards)
             {
                 if (!card.Id.Equals(cardId) &&
                     (!string.Equals(card.Name.Trim(), cardName, StringComparison.OrdinalIgnoreCase) ||
@@ -251,7 +250,9 @@ namespace CardGameDef.Unity
         // NOTE: CAN THROW EXCEPTION
         public Uri PrintPdf()
         {
-#if !UNITY_WEBGL
+#if UNITY_WEBGL
+            throw new System.NotImplementedException();
+#else
             if (!Directory.Exists(PrintPdfDirectory))
                 Directory.CreateDirectory(PrintPdfDirectory);
 
@@ -261,7 +262,7 @@ namespace CardGameDef.Unity
 
             var cardsPerRow = (int) Math.Floor((PrintPdfWidth - PrintPdfMargin * 2) / SourceGame.CardSize.X);
             var rowsPerPage = (int) Math.Floor((PrintPdfHeight - PrintPdfMargin * 2) / SourceGame.CardSize.Y);
-            int cardsPerPage = cardsPerRow * rowsPerPage;
+            var cardsPerPage = cardsPerRow * rowsPerPage;
             PdfPage page = null;
             XGraphics gfx = null;
             double px = PrintPdfMargin * PrintPdfPixelsPerInch, py = PrintPdfMargin * PrintPdfPixelsPerInch;
@@ -275,8 +276,8 @@ namespace CardGameDef.Unity
                     py = PrintPdfMargin * PrintPdfPixelsPerInch;
                 }
 
-                XImage image = XImage.FromFile(_cards[cardNumber].ImageFilePath);
-                gfx.DrawImage(image, px, py, SourceGame.CardSize.X * PrintPdfPixelsPerInch,
+                var xImage = XImage.FromFile(_cards[cardNumber].ImageFilePath);
+                gfx.DrawImage(xImage, px, py, SourceGame.CardSize.X * PrintPdfPixelsPerInch,
                     SourceGame.CardSize.Y * PrintPdfPixelsPerInch);
                 px += SourceGame.CardSize.X * PrintPdfPixelsPerInch;
 
@@ -292,8 +293,6 @@ namespace CardGameDef.Unity
             pdfDocument.Dispose();
 
             return new Uri(UnityFileMethods.FilePrefix + PrintPdfFilePath);
-#else
-            throw new System.NotImplementedException();
 #endif
         }
     }

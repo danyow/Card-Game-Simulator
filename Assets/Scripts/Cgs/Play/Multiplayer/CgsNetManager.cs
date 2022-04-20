@@ -26,11 +26,13 @@ namespace Cgs.Play.Multiplayer
         }
 
         public string RoomIdIp => "localhost".Equals(networkAddress, StringComparison.Ordinal)
-            ? string.IsNullOrEmpty(lrm.serverId)
-                ? Dns.GetHostEntry(Dns.GetHostName()).AddressList
-                    .First(f => f.AddressFamily == AddressFamily.InterNetwork).ToString()
-                : lrm.serverId
+            ? RoomId
             : networkAddress;
+
+        private string RoomId => string.IsNullOrEmpty(lrm.serverId)
+            ? Dns.GetHostEntry(Dns.GetHostName()).AddressList.First(f => f.AddressFamily == AddressFamily.InterNetwork)
+                .ToString()
+            : lrm.serverId;
 
         public static int ActiveConnectionCount => NetworkServer.connections.Count(con => con.Value.isReady);
 
@@ -44,22 +46,18 @@ namespace Cgs.Play.Multiplayer
 
         public PlayController playController;
 
-        private Guid _cardStackAssetId;
-        private Guid _cardAssetId;
-        private Guid _dieAssetId;
-
         public override void Start()
         {
             base.Start();
 
-            _cardStackAssetId = playController.cardStackPrefab.GetComponent<NetworkIdentity>().assetId;
-            NetworkClient.RegisterSpawnHandler(_cardStackAssetId, SpawnStack, UnSpawn);
+            var cardStackAssetId = playController.cardStackPrefab.GetComponent<NetworkIdentity>().assetId;
+            NetworkClient.RegisterSpawnHandler(cardStackAssetId, SpawnStack, UnSpawn);
 
-            _cardAssetId = playController.cardModelPrefab.GetComponent<NetworkIdentity>().assetId;
-            NetworkClient.RegisterSpawnHandler(_cardAssetId, SpawnCard, UnSpawnCard);
+            var cardAssetId = playController.cardModelPrefab.GetComponent<NetworkIdentity>().assetId;
+            NetworkClient.RegisterSpawnHandler(cardAssetId, SpawnCard, UnSpawnCard);
 
-            _dieAssetId = playController.diePrefab.GetComponent<NetworkIdentity>().assetId;
-            NetworkClient.RegisterSpawnHandler(_dieAssetId, SpawnDie, UnSpawn);
+            var dieAssetId = playController.diePrefab.GetComponent<NetworkIdentity>().assetId;
+            NetworkClient.RegisterSpawnHandler(dieAssetId, SpawnDie, UnSpawn);
 
             Discovery = GetComponent<CgsNetDiscovery>();
             Debug.Log("[CgsNet Manager] Acquired NetworkDiscovery.");
@@ -71,16 +69,16 @@ namespace Cgs.Play.Multiplayer
             Debug.Log("[CgsNet Manager] Server adding player...");
         }
 
-        public override void OnClientConnect(NetworkConnection connection)
+        public override void OnClientConnect(NetworkConnection conn)
         {
-            base.OnClientConnect(connection);
+            base.OnClientConnect(conn);
             Debug.Log("[CgsNet Manager] Client connected!");
         }
 
         private GameObject SpawnStack(Vector3 position, Guid assetId)
         {
             Debug.Log("[CgsNet Manager] SpawnStack");
-            Transform target = playController.playMat.transform;
+            var target = playController.playMat.transform;
             var cardStack = Instantiate(playController.cardStackPrefab, target.parent).GetComponent<CardStack>();
             cardStack.transform.SetParent(target);
             return cardStack.gameObject;
@@ -89,16 +87,15 @@ namespace Cgs.Play.Multiplayer
         private GameObject SpawnCard(Vector3 position, Guid assetId)
         {
             Debug.Log("[CgsNet Manager] SpawnCard");
-            GameObject newCard =
-                Instantiate(playController.cardModelPrefab, playController.playMat.transform);
-            PlayController.SetPlayActions(newCard.GetComponent<CardModel>());
-            return newCard;
+            var newCardGameObject = Instantiate(playController.cardModelPrefab, playController.playMat.transform);
+            PlayController.SetPlayActions(newCardGameObject.GetComponent<CardModel>());
+            return newCardGameObject;
         }
 
         private GameObject SpawnDie(Vector3 position, Guid assetId)
         {
             Debug.Log("[CgsNet Manager] SpawnDie");
-            Transform target = playController.playMat.transform;
+            var target = playController.playMat.transform;
             var die = Instantiate(playController.diePrefab, target.parent).GetOrAddComponent<Die>();
             die.transform.SetParent(target);
             return die.gameObject;
@@ -122,13 +119,13 @@ namespace Cgs.Play.Multiplayer
 
         public void Restart()
         {
-            foreach (CardStack cardStack in playController.playMat.GetComponentsInChildren<CardStack>())
+            foreach (var cardStack in playController.playMat.GetComponentsInChildren<CardStack>())
                 NetworkServer.UnSpawn(cardStack.gameObject);
-            foreach (CardModel cardModel in playController.playMat.GetComponentsInChildren<CardModel>())
+            foreach (var cardModel in playController.playMat.GetComponentsInChildren<CardModel>())
                 NetworkServer.UnSpawn(cardModel.gameObject);
-            foreach (Die die in playController.playMat.GetComponentsInChildren<Die>())
+            foreach (var die in playController.playMat.GetComponentsInChildren<Die>())
                 NetworkServer.UnSpawn(die.gameObject);
-            foreach (CgsNetPlayer player in FindObjectsOfType<CgsNetPlayer>())
+            foreach (var player in FindObjectsOfType<CgsNetPlayer>())
                 player.TargetRestart();
         }
 

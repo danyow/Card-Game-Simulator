@@ -3,6 +3,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 using Cgs.CardGameView.Multiplayer;
+using Cgs.Play.Drawer;
 using UnityEngine;
 using UnityEngine.EventSystems;
 
@@ -16,6 +17,8 @@ namespace Cgs.CardGameView
     public class CardDropArea : MonoBehaviour, IPointerEnterHandler, IPointerExitHandler, IDropHandler
     {
         public ICardDropHandler DropHandler { get; set; }
+
+        public int? Index { get; set; }
 
         public bool isBlocker;
 
@@ -31,30 +34,34 @@ namespace Cgs.CardGameView
 
         public void OnPointerEnter(PointerEventData eventData)
         {
-            CardModel cardModel = CardModel.GetPointerDrag(eventData);
+            var cardModel = CardModel.GetPointerDrag(eventData);
             if (cardModel == null)
                 return;
 
             cardModel.DropTarget = this;
-            cardModel.IsHighlighted = false;
+            cardModel.HighlightMode = HighlightMode.Off;
         }
 
         public void OnPointerExit(PointerEventData eventData)
         {
-            CardModel cardModel = CardModel.GetPointerDrag(eventData);
+            var cardModel = CardModel.GetPointerDrag(eventData);
             if (cardModel != null && cardModel.DropTarget == this)
                 cardModel.DropTarget = null;
         }
 
         public void OnDrop(PointerEventData eventData)
         {
-            CardModel cardModel = CardModel.GetPointerDrag(eventData);
+            var cardModel = CardModel.GetPointerDrag(eventData);
             if (cardModel == null
                 || cardModel.ParentCardZone != null && cardModel.ParentCardZone.type != CardZoneType.Area
                 || cardModel.PlaceHolderCardZone != null && cardModel.PlaceHolderCardZone.type != CardZoneType.Area)
                 return;
 
-            DropHandler.OnDrop(cardModel);
+            var drawerViewer = DropHandler as DrawerViewer;
+            if (drawerViewer != null && Index != null)
+                drawerViewer.AddCard(cardModel.Value, Index ?? 0);
+            else
+                DropHandler.OnDrop(cardModel);
         }
     }
 }

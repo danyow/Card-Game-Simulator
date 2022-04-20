@@ -65,10 +65,7 @@ namespace Cgs.Cards
 
         private Sprite _cardImageSprite;
 
-        private DownloadMenu Downloader => _downloader
-            ? _downloader
-            : (_downloader = Instantiate(downloadMenuPrefab)
-                .GetOrAddComponent<DownloadMenu>());
+        private DownloadMenu Downloader => _downloader ??= Instantiate(downloadMenuPrefab).GetOrAddComponent<DownloadMenu>();
 
         private DownloadMenu _downloader;
 
@@ -172,6 +169,10 @@ namespace Cgs.Cards
         [UsedImplicitly]
         public void StartImport()
         {
+            if (CardImageUri != null && !CardImageUri.AbsoluteUri.EndsWith(CardGameManager.Current.CardImageFileType))
+                CardGameManager.Instance.Messenger.Show(
+                    "WARNING!: Image file type does not match " + CardGameManager.Current.CardImageFileType, true);
+
             StartCoroutine(ImportCard());
         }
 

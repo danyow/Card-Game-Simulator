@@ -1,12 +1,15 @@
-// TODO: EITHER COMPLETELY REFACTOR OR REPLACE THIS CLASS
+// https://forum.unity.com/threads/simple-swipe-and-tap-mobile-input.376160/
 
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 
+// ReSharper disable InconsistentNaming
+// ReSharper disable RedundantDefaultMemberInitializer
+
 namespace Cgs
 {
-    class CardinalDirection
+    internal static class CardinalDirection
     {
         public static readonly Vector2 Up = new Vector2(0, 1);
         public static readonly Vector2 Down = new Vector2(0, -1);
@@ -35,14 +38,16 @@ namespace Cgs
     {
         #region Inspector Variables
 
-        [Tooltip("Min swipe distance (inches) to register as swipe")]
-        [SerializeField] float minSwipeLength = 1f;
+        [Tooltip("Min swipe distance (inches) to register as swipe")] [SerializeField]
+        float minSwipeLength = 1f;
 
-        [Tooltip("If true, a swipe is counted when the min swipe length is reached. If false, a swipe is counted when the touch/click ends.")]
-        [SerializeField] bool triggerSwipeAtMinLength = false;
+        [Tooltip(
+            "If true, a swipe is counted when the min swipe length is reached. If false, a swipe is counted when the touch/click ends.")]
+        [SerializeField]
+        bool triggerSwipeAtMinLength = false;
 
-        [Tooltip("Whether to detect eight or four cardinal directions")]
-        [SerializeField] bool useEightDirections = false;
+        [Tooltip("Whether to detect eight or four cardinal directions")] [SerializeField]
+        bool useEightDirections = false;
 
         #endregion
 
@@ -51,21 +56,22 @@ namespace Cgs
         const float defaultDPI = 72f;
         const float dpcmFactor = 2.54f;
 
-        static Dictionary<Swipe, Vector2> cardinalDirections = new Dictionary<Swipe, Vector2>()
-    {
-        { Swipe.Up,         CardinalDirection.Up                 },
-        { Swipe.Down,         CardinalDirection.Down             },
-        { Swipe.Right,         CardinalDirection.Right             },
-        { Swipe.Left,         CardinalDirection.Left             },
-        { Swipe.UpRight,     CardinalDirection.UpRight             },
-        { Swipe.UpLeft,     CardinalDirection.UpLeft             },
-        { Swipe.DownRight,     CardinalDirection.DownRight         },
-        { Swipe.DownLeft,     CardinalDirection.DownLeft         }
-    };
+        static readonly Dictionary<Swipe, Vector2> cardinalDirections = new Dictionary<Swipe, Vector2>()
+        {
+            {Swipe.Up, CardinalDirection.Up},
+            {Swipe.Down, CardinalDirection.Down},
+            {Swipe.Right, CardinalDirection.Right},
+            {Swipe.Left, CardinalDirection.Left},
+            {Swipe.UpRight, CardinalDirection.UpRight},
+            {Swipe.UpLeft, CardinalDirection.UpLeft},
+            {Swipe.DownRight, CardinalDirection.DownRight},
+            {Swipe.DownLeft, CardinalDirection.DownLeft}
+        };
 
         public delegate void OnSwipeDetectedHandler(Swipe swipeDirection, Vector2 swipeVelocity);
 
         static OnSwipeDetectedHandler _OnSwipeDetected;
+
         public static event OnSwipeDetectedHandler OnSwipeDetected
         {
             add
@@ -73,17 +79,11 @@ namespace Cgs
                 _OnSwipeDetected += value;
                 autoDetectSwipes = true;
             }
-            remove
-            {
-                _OnSwipeDetected -= value;
-            }
+            remove => _OnSwipeDetected -= value;
         }
-
-        public static Vector2 swipeVelocity;
 
         static float dpcm;
         static float swipeStartTime;
-        static float swipeEndTime;
         static bool autoDetectSwipes;
         static bool swipeEnded;
         static Swipe swipeDirection;
@@ -131,8 +131,8 @@ namespace Cgs
                     return false;
                 }
 
-                swipeEndTime = Time.time;
-                swipeVelocity = currentSwipe * (swipeEndTime - swipeStartTime);
+                float swipeEndTime = Time.time;
+                Vector2 swipeVelocity = currentSwipe * (swipeEndTime - swipeStartTime);
                 swipeDirection = GetSwipeDirByTouch(currentSwipe);
                 swipeEnded = true;
 
@@ -140,23 +140,61 @@ namespace Cgs
                 {
                     _OnSwipeDetected(swipeDirection, swipeVelocity);
                 }
+
                 return true;
             }
             else
             {
                 swipeDirection = Swipe.None;
             }
+
             return false;
         }
-        public static bool IsSwiping() { return !IsSwipingDirection(Swipe.None); }
-        public static bool IsSwipingRight() { return IsSwipingDirection(Swipe.Right); }
-        public static bool IsSwipingLeft() { return IsSwipingDirection(Swipe.Left); }
-        public static bool IsSwipingUp() { return IsSwipingDirection(Swipe.Up); }
-        public static bool IsSwipingDown() { return IsSwipingDirection(Swipe.Down); }
-        public static bool IsSwipingDownLeft() { return IsSwipingDirection(Swipe.DownLeft); }
-        public static bool IsSwipingDownRight() { return IsSwipingDirection(Swipe.DownRight); }
-        public static bool IsSwipingUpLeft() { return IsSwipingDirection(Swipe.UpLeft); }
-        public static bool IsSwipingUpRight() { return IsSwipingDirection(Swipe.UpRight); }
+
+        public static bool IsSwiping()
+        {
+            return !IsSwipingDirection(Swipe.None);
+        }
+
+        public static bool IsSwipingRight()
+        {
+            return IsSwipingDirection(Swipe.Right);
+        }
+
+        public static bool IsSwipingLeft()
+        {
+            return IsSwipingDirection(Swipe.Left);
+        }
+
+        public static bool IsSwipingUp()
+        {
+            return IsSwipingDirection(Swipe.Up);
+        }
+
+        public static bool IsSwipingDown()
+        {
+            return IsSwipingDirection(Swipe.Down);
+        }
+
+        public static bool IsSwipingDownLeft()
+        {
+            return IsSwipingDirection(Swipe.DownLeft);
+        }
+
+        public static bool IsSwipingDownRight()
+        {
+            return IsSwipingDirection(Swipe.DownRight);
+        }
+
+        public static bool IsSwipingUpLeft()
+        {
+            return IsSwipingDirection(Swipe.UpLeft);
+        }
+
+        public static bool IsSwipingUpRight()
+        {
+            return IsSwipingDirection(Swipe.UpRight);
+        }
 
         #region Helper Functions
 

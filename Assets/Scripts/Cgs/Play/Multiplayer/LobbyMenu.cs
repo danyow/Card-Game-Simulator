@@ -6,7 +6,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Cgs.Menu;
-using Cgs.ScrollRects;
+using Cgs.UI;
 using JetBrains.Annotations;
 using Mirror;
 using UnityEngine;
@@ -19,6 +19,9 @@ namespace Cgs.Play.Multiplayer
     [RequireComponent(typeof(Modal))]
     public class LobbyMenu : SelectionPanel
     {
+        public const string AndroidWarningMessage =
+            "WARNING!!!\nYou are connecting to an Android host, which is likely to lose connection or have errors.\nIt is recommended to use a PC host.";
+
         public string RoomIdIpLabel => "Room " + (_isLanConnectionSource ? "IP" : "Id") + ":";
         public string RoomIdIpPlaceholder => "Enter Room " + (_isLanConnectionSource ? "IP" : "Id") + "...";
 
@@ -73,14 +76,11 @@ namespace Cgs.Play.Multiplayer
                 : _selectedServerIp;
 
         private HostAuthentication Authenticator =>
-            _authenticator
-                ? _authenticator
-                : (_authenticator = Instantiate(hostAuthenticationPrefab).GetComponent<HostAuthentication>());
+            _authenticator ??= Instantiate(hostAuthenticationPrefab).GetComponent<HostAuthentication>();
 
         private HostAuthentication _authenticator;
 
-        private Modal Menu =>
-            _menu ? _menu : (_menu = gameObject.GetOrAddComponent<Modal>());
+        private Modal Menu => _menu ??= gameObject.GetOrAddComponent<Modal>();
 
         private Modal _menu;
 
@@ -221,6 +221,7 @@ namespace Cgs.Play.Multiplayer
             if (IsInternetConnectionSource)
             {
                 CgsNetManager.Instance.lrm.serverName = CgsNetManager.Instance.RoomName;
+                CgsNetManager.Instance.lrm.extraServerData = Application.platform.ToString();
                 CgsNetManager.Instance.lrm.isPublicServer = true;
             }
             else
@@ -287,10 +288,12 @@ namespace Cgs.Play.Multiplayer
             if (IsLanConnectionSource)
             {
                 if (_selectedServerId != null && DiscoveredServers.TryGetValue(_selectedServerId.GetValueOrDefault(),
-                    out var discoveryResponse) && discoveryResponse.Uri != null)
+                        out var discoveryResponse) && discoveryResponse.Uri != null)
                 {
                     CgsNetManager.Instance.RoomName = discoveryResponse.RoomName;
                     Transport.activeTransport = CgsNetManager.Instance.lanConnector.directConnectTransport;
+                    if (RuntimePlatform.Android.ToString().Equals(discoveryResponse.HostPlatform))
+                        CardGameManager.Instance.Messenger.Show(AndroidWarningMessage, true);
                     NetworkManager.singleton.StartClient(discoveryResponse.Uri);
                 }
                 else if (Uri.IsWellFormedUriString(_selectedServerIp, UriKind.RelativeOrAbsolute))
@@ -309,8 +312,13 @@ namespace Cgs.Play.Multiplayer
             else
             {
                 if (CgsNetManager.Instance.lrm.relayServerList.ToDictionary(server => server.serverId,
-                    server => server.serverName).TryGetValue(_selectedServerIp, out var roomName))
-                    CgsNetManager.Instance.RoomName = roomName;
+                        server => server).TryGetValue(_selectedServerIp, out var serverRoom))
+                {
+                    CgsNetManager.Instance.RoomName = serverRoom.serverName;
+                    if (RuntimePlatform.Android.ToString().Equals(serverRoom.serverData))
+                        CardGameManager.Instance.Messenger.Show(AndroidWarningMessage, true);
+                }
+
                 NetworkManager.singleton.networkAddress = _selectedServerIp;
                 NetworkManager.singleton.StartClient();
             }

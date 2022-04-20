@@ -33,7 +33,9 @@ namespace Cgs.Menu
                 Paste();
             else if (Inputs.IsFocus && urlInputField.interactable)
                 urlInputField.ActivateInputField();
-            else if (Inputs.IsCancel || Inputs.IsOption)
+            else if (Inputs.IsOption)
+                GoToGamesList();
+            else if (Inputs.IsCancel)
                 Hide();
         }
 
@@ -73,7 +75,7 @@ namespace Cgs.Menu
 
         private IEnumerator Download()
         {
-            string url = urlInputField.text.Trim();
+            var url = urlInputField.text.Trim();
 
             urlInputField.text = string.Empty;
             urlInputField.interactable = false;
@@ -85,6 +87,12 @@ namespace Cgs.Menu
             // ReSharper disable once Unity.InefficientPropertyAccess
             urlInputField.interactable = true;
             Hide();
+        }
+
+        [UsedImplicitly]
+        public void GoToGamesList()
+        {
+            Application.OpenURL(Tags.GameListUrl);
         }
     }
 }

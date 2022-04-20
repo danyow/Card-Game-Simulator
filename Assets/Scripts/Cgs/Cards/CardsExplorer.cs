@@ -4,7 +4,7 @@
 
 using System;
 using System.Collections.Generic;
-using Cgs.CardGameView;
+using Cgs.CardGameView.Viewer;
 using Cgs.Menu;
 using JetBrains.Annotations;
 using UnityEngine;
@@ -32,21 +32,15 @@ namespace Cgs.Cards
         public List<GameObject> editButtons;
         public SearchResults searchResults;
 
-        private DecisionModal ImportModal => _importModal
-            ? _importModal
-            : _importModal = Instantiate(cardSetImportModalPrefab).GetOrAddComponent<DecisionModal>();
+        private DecisionModal ImportModal => _importModal ??= Instantiate(cardSetImportModalPrefab).GetOrAddComponent<DecisionModal>();
 
         private DecisionModal _importModal;
 
-        private CardImportMenu CardImporter => _cardImporter
-            ? _cardImporter
-            : _cardImporter = Instantiate(cardImportMenuPrefab).GetOrAddComponent<CardImportMenu>();
+        private CardImportMenu CardImporter => _cardImporter ??= Instantiate(cardImportMenuPrefab).GetOrAddComponent<CardImportMenu>();
 
         private CardImportMenu _cardImporter;
 
-        private SetImportMenu SetImporter => _setImporter
-            ? _setImporter
-            : _setImporter = Instantiate(setImportMenuPrefab).GetOrAddComponent<SetImportMenu>();
+        private SetImportMenu SetImporter => _setImporter ??= Instantiate(setImportMenuPrefab).GetOrAddComponent<SetImportMenu>();
 
         private SetImportMenu _setImporter;
 
@@ -78,7 +72,7 @@ namespace Cgs.Cards
             bannerImage.sprite = CardGameManager.Current.BannerImageSprite;
             var cardSize = new Vector2(CardGameManager.Current.CardSize.X, CardGameManager.Current.CardSize.Y);
             ((GridLayoutGroup) searchResults.layoutGroup).cellSize = cardSize * CardGameManager.PixelsPerInch;
-            foreach (GameObject button in editButtons)
+            foreach (var button in editButtons)
                 button.SetActive(Settings.DeveloperMode);
         }
 

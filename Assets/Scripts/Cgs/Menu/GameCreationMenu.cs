@@ -47,9 +47,7 @@ namespace Cgs.Menu
         public Image playMatImage;
         public Button createButton;
 
-        private DownloadMenu Downloader => _downloader
-            ? _downloader
-            : _downloader = Instantiate(downloadMenuPrefab).GetOrAddComponent<DownloadMenu>();
+        private DownloadMenu Downloader => _downloader ??= Instantiate(downloadMenuPrefab).GetOrAddComponent<DownloadMenu>();
 
         private DownloadMenu _downloader;
 
@@ -355,7 +353,7 @@ namespace Cgs.Menu
             if (!createButton.interactable)
                 yield break;
 
-            string gameName = GameName.Trim().Replace("@", "");
+            var gameName = GameName.Trim().Replace("@", "");
             if (CardGameManager.Instance.AllCardGames.ContainsKey(gameName))
             {
                 CardGameManager.Instance.Messenger.Show(CreateWarningMessage);

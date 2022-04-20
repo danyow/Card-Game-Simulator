@@ -9,6 +9,7 @@ using CardGameDef;
 using CardGameDef.Unity;
 using Cgs.CardGameView;
 using Cgs.CardGameView.Multiplayer;
+using Cgs.CardGameView.Viewer;
 using Cgs.Cards;
 using Cgs.Menu;
 using JetBrains.Annotations;
@@ -30,47 +31,50 @@ namespace Cgs.Decks
         public const float CardPrefabHeight = 350f;
         public const float CardZonePrefabSpacing = -225f;
 
+        public bool IsZoomed { get; private set; }
+
         public GameObject cardViewerPrefab;
         public GameObject cardModelPrefab;
         public GameObject cardZonePrefab;
         public GameObject deckLoadMenuPrefab;
         public GameObject deckSaveMenuPrefab;
+        public DeckEditorLayout deckEditorLayout;
         public RectTransform layoutContent;
+        public RectTransform searchContent;
         public List<CardDropArea> dropZones;
         public ScrollRect scrollRect;
         public Text nameText;
         public Text countText;
         public SearchResults searchResults;
 
-        private static int CardsPerZone =>
-            Mathf.FloorToInt(CardGameManager.PixelsPerInch * CardGameManager.Current.CardSize.Y / CardPrefabHeight * 4);
+        private int CardsPerZone =>
+            Mathf.FloorToInt(CardGameManager.PixelsPerInch * CardGameManager.Current.CardSize.Y / CardPrefabHeight *
+                             (IsZoomed ? 8 : 4));
 
         public List<CardModel> CardModels
         {
             get
             {
-                List<CardModel> cardModels = new List<CardModel>();
-                foreach (CardZone zone in CardZones)
-                    cardModels.AddRange(zone.GetComponentsInChildren<CardModel>());
+                var cardModels = new List<CardModel>();
+                foreach (var cardZone in CardZones)
+                    cardModels.AddRange(cardZone.GetComponentsInChildren<CardModel>());
                 return cardModels;
             }
         }
 
         private List<CardZone> CardZones { get; } = new List<CardZone>();
 
-        private float CardZoneWidth => _cardZoneWidth > 0
-            ? _cardZoneWidth
-            : _cardZoneWidth = cardZonePrefab.GetComponent<RectTransform>().rect.width;
+        private float CardZoneWidth => _cardZoneWidth ??= cardZonePrefab.GetComponent<RectTransform>().rect.width;
 
-        private float _cardZoneWidth = -1f;
+        private float? _cardZoneWidth;
 
         private DeckLoadMenu DeckLoader =>
-            _deckLoader ? _deckLoader : _deckLoader = Instantiate(deckLoadMenuPrefab).GetOrAddComponent<DeckLoadMenu>();
+            _deckLoader ??= Instantiate(deckLoadMenuPrefab).GetOrAddComponent<DeckLoadMenu>();
 
         private DeckLoadMenu _deckLoader;
 
         private DeckSaveMenu DeckSaver =>
-            _deckSaver ? _deckSaver : _deckSaver = Instantiate(deckSaveMenuPrefab).GetOrAddComponent<DeckSaveMenu>();
+            _deckSaver ??= Instantiate(deckSaveMenuPrefab).GetOrAddComponent<DeckSaveMenu>();
 
         private DeckSaveMenu _deckSaver;
 
@@ -80,8 +84,8 @@ namespace Cgs.Decks
             {
                 var deck = new UnityDeck(CardGameManager.Current, SavedDeck?.Name ?? Deck.DefaultName,
                     CardGameManager.Current.DeckFileType);
-                foreach (CardModel card in CardZones.SelectMany(zone => zone.GetComponentsInChildren<CardModel>()))
-                    deck.Add(card.Value);
+                foreach (var cardModel in CardZones.SelectMany(zone => zone.GetComponentsInChildren<CardModel>()))
+                    deck.Add(cardModel.Value);
                 return deck;
             }
         }
@@ -127,9 +131,9 @@ namespace Cgs.Decks
                 ShowDeckLoadMenu();
             else if (Inputs.IsSave)
                 ShowDeckSaveMenu();
-            else if (Inputs.IsFocus)
+            else if (Inputs.IsFocus && !IsZoomed)
                 searchResults.inputField.ActivateInputField();
-            else if (Inputs.IsFilter)
+            else if (Inputs.IsFilter && !IsZoomed)
                 searchResults.ShowSearchMenu();
             else if (Inputs.IsCancel)
                 CheckBackToMainMenu();
@@ -143,8 +147,8 @@ namespace Cgs.Decks
 
         private void ClearCards()
         {
-            foreach (CardZone zone in CardZones)
-                zone.transform.DestroyAllChildren();
+            foreach (var cardZone in CardZones)
+                cardZone.transform.DestroyAllChildren();
             scrollRect.horizontalNormalizedPosition = 0;
 
             CardViewer.Instance.IsVisible = false;
@@ -154,16 +158,16 @@ namespace Cgs.Decks
 
         private void Consolidate()
         {
-            HashSet<Transform> seen = new HashSet<Transform>();
-            List<Transform> cards = new List<Transform>();
-            foreach (Transform cardZoneTransform in CardZones.Select(cardZone => cardZone.transform))
+            var cardTransforms = new List<Transform>();
+            var seen = new HashSet<Transform>();
+            foreach (var cardZoneTransform in CardZones.Select(cardZone => cardZone.transform))
             {
                 for (var i = 0; i < cardZoneTransform.childCount; i++)
                 {
-                    Transform current = cardZoneTransform.GetChild(i);
+                    var current = cardZoneTransform.GetChild(i);
                     if (seen.Contains(current))
                         continue;
-                    cards.Add(current);
+                    cardTransforms.Add(current);
                     var cardModel = current.GetComponent<CardModel>();
                     if (cardModel != null && cardModel.PlaceHolder != null)
                         seen.Add(cardModel.PlaceHolder);
@@ -171,29 +175,29 @@ namespace Cgs.Decks
                 }
             }
 
-            for (var i = 0; i < cards.Count; i++)
+            for (var i = 0; i < cardTransforms.Count; i++)
             {
-                Transform card = cards[i];
+                var cardTransform = cardTransforms[i];
                 if (i / CardsPerZone >= CardZones.Count)
                     AddCardZone();
-                Transform cardZone = CardZones[i / CardsPerZone].transform;
-                if (card.parent != cardZone)
-                    card.SetParent(cardZone);
-                int cardZoneIndex = i % CardsPerZone;
-                if (card.GetSiblingIndex() != cardZoneIndex)
-                    card.SetSiblingIndex(cardZoneIndex);
+                var cardZoneTransform = CardZones[i / CardsPerZone].transform;
+                if (cardTransform.parent != cardZoneTransform)
+                    cardTransform.SetParent(cardZoneTransform);
+                var cardZoneIndex = i % CardsPerZone;
+                if (cardTransform.GetSiblingIndex() != cardZoneIndex)
+                    cardTransform.SetSiblingIndex(cardZoneIndex);
             }
 
-            for (int i = CardZones.Count - 1; i > 0; i--)
+            for (var i = CardZones.Count - 1; i > 0; i--)
             {
                 if (CardZones[i].transform.childCount != 0)
                     break;
-                GameObject cardZone = CardZones[i].gameObject;
+                var cardZoneGameObject = CardZones[i].gameObject;
                 CardZones.RemoveAt(i);
-                Destroy(cardZone);
+                Destroy(cardZoneGameObject);
             }
 
-            if (CardZones.Count * CardsPerZone == cards.Count)
+            if (CardZones.Count * CardsPerZone == cardTransforms.Count)
                 AddCardZone();
 
             Resize();
@@ -216,8 +220,8 @@ namespace Cgs.Decks
 
         private void Resize()
         {
-            Vector2 size = layoutContent.sizeDelta;
-            float width = CardZoneWidth * CardZones.Count;
+            var size = layoutContent.sizeDelta;
+            var width = CardZoneWidth * CardZones.Count;
             if (Math.Abs(width - size.x) > 0.1f)
                 layoutContent.sizeDelta = new Vector2(width, layoutContent.sizeDelta.y);
         }
@@ -242,7 +246,7 @@ namespace Cgs.Decks
             if (card == null)
                 return;
 
-            CardZone cardZone = CardZones.Last();
+            var cardZone = CardZones.Last();
             var cardModel = Instantiate(cardModelPrefab, cardZone.transform).GetOrAddComponent<CardModel>();
             cardModel.Value = card;
 
@@ -285,7 +289,7 @@ namespace Cgs.Decks
             if (cardModel == null || cardModel.ParentCardZone == null)
                 return;
 
-            int cardZoneIndex = CardZones.IndexOf(cardModel.ParentCardZone);
+            var cardZoneIndex = CardZones.IndexOf(cardModel.ParentCardZone);
             if (cardZoneIndex > 0 && cardZoneIndex < CardZones.Count)
                 scrollRect.horizontalNormalizedPosition = CardZones.Count > 1
                     ? cardZoneIndex / (CardZones.Count - 1f)
@@ -295,12 +299,22 @@ namespace Cgs.Decks
         [UsedImplicitly]
         public void Sort()
         {
-            UnityDeck sortedDeck = CurrentDeck;
+            var sortedDeck = CurrentDeck;
             sortedDeck.Sort();
-            foreach (CardZone zone in CardZones)
-                zone.transform.DestroyAllChildren();
-            foreach (Card card in sortedDeck.Cards)
+            foreach (var cardZone in CardZones)
+                cardZone.transform.DestroyAllChildren();
+            foreach (var card in sortedDeck.Cards)
                 AddCard((UnityCard) card);
+        }
+
+        [UsedImplicitly]
+        public void ToggleZoom()
+        {
+            IsZoomed = !IsZoomed;
+            searchContent.gameObject.SetActive(!IsZoomed);
+            var deckEditorLayoutRectTransform = (RectTransform) deckEditorLayout.transform;
+            deckEditorLayoutRectTransform.anchorMin = IsZoomed ? Vector2.zero : DeckEditorLayout.DeckButtonsPortraitAnchor;
+            deckEditorLayoutRectTransform.offsetMin = Vector2.up * (IsZoomed && deckEditorLayout.IsPortrait ? 90 : 10);
         }
 
         [UsedImplicitly]
@@ -318,8 +332,7 @@ namespace Cgs.Decks
         [UsedImplicitly]
         public string UpdateDeckName(string newName)
         {
-            if (newName == null)
-                newName = string.Empty;
+            newName ??= string.Empty;
             newName = UnityFileMethods.GetSafeFileName(newName);
             nameText.text = newName + (HasChanged ? ChangeIndicator : string.Empty);
             return newName;
@@ -328,7 +341,7 @@ namespace Cgs.Decks
         [UsedImplicitly]
         public void UpdateDeckStats()
         {
-            string deckName = Deck.DefaultName;
+            var deckName = Deck.DefaultName;
             if (SavedDeck != null)
                 deckName = SavedDeck.Name;
             nameText.text = deckName + (HasChanged ? ChangeIndicator : string.Empty);
@@ -348,7 +361,7 @@ namespace Cgs.Decks
                 return;
 
             Clear();
-            foreach (Card card in deck.Cards)
+            foreach (var card in deck.Cards)
                 AddCard((UnityCard) card);
             SavedDeck = deck;
             UpdateDeckStats();
@@ -358,9 +371,9 @@ namespace Cgs.Decks
         [UsedImplicitly]
         public void ShowDeckSaveMenu()
         {
-            UnityDeck deckToSave = CurrentDeck;
-            bool overwrite = SavedDeck != null && deckToSave.Name.Equals(SavedDeck.Name);
-            DeckSaver.Show(deckToSave, UpdateDeckName, OnSaveDeck, overwrite);
+            var deckToSave = CurrentDeck;
+            var shouldOverwrite = SavedDeck != null && deckToSave.Name.Equals(SavedDeck.Name);
+            DeckSaver.Show(deckToSave, UpdateDeckName, OnSaveDeck, shouldOverwrite);
         }
 
         private void OnSaveDeck(Deck savedDeck)

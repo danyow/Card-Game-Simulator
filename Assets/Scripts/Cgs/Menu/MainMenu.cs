@@ -56,21 +56,23 @@ namespace Cgs.Menu
 
         // ReSharper disable once NotAccessedField.Global
         public GameObject createButton;
+        public GameObject syncButton;
+
         // ReSharper disable once NotAccessedField.Global
         public GameObject editButton;
+
+        // ReSharper disable once NotAccessedField.Global
         public Button joinButton;
         public GameObject quitButton;
         public Text versionText;
 
-        private DownloadMenu Downloader => _downloader
-            ? _downloader
-            : (_downloader = Instantiate(downloadMenuPrefab)
-                .GetOrAddComponent<DownloadMenu>());
+        private DownloadMenu Downloader => _downloader ??= Instantiate(downloadMenuPrefab)
+            .GetOrAddComponent<DownloadMenu>();
 
         private DownloadMenu _downloader;
 
         private GameCreationMenu Creator =>
-            _creator ? _creator : (_creator = Instantiate(createMenuPrefab).GetOrAddComponent<GameCreationMenu>());
+            _creator ??= Instantiate(createMenuPrefab).GetOrAddComponent<GameCreationMenu>();
 
         private GameCreationMenu _creator;
 
@@ -94,7 +96,7 @@ namespace Cgs.Menu
             versionText.text = VersionMessage;
 
             if (!HasSeenTutorial)
-                CardGameManager.Instance.Messenger.Ask(TutorialPrompt, ConfirmHasSeenTutorial, GoToTutorial);
+                CardGameManager.Instance.Messenger.Ask(TutorialPrompt, ConfirmHasSeenTutorial, GoToTutorial, true);
         }
 
         private static void ConfirmHasSeenTutorial()
@@ -208,6 +210,8 @@ namespace Cgs.Menu
             currentBannerImage.sprite = CardGameManager.Current.BannerImageSprite;
             previousCardImage.sprite = CardGameManager.Instance.Previous.CardBackImageSprite;
             nextCardImage.sprite = CardGameManager.Instance.Next.CardBackImageSprite;
+
+            syncButton.SetActive(CardGameManager.Current.AutoUpdateUrl?.IsWellFormedOriginalString() ?? false);
         }
 
         [UsedImplicitly]
@@ -257,12 +261,19 @@ namespace Cgs.Menu
         }
 
         [UsedImplicitly]
+        public void Sync()
+        {
+            if (Time.timeSinceLevelLoad < StartBufferTime)
+                return;
+            CardGameManager.Instance.StartCoroutine(CardGameManager.Instance.UpdateCardGame(CardGameManager.Current));
+        }
+
+        [UsedImplicitly]
         public void Edit()
         {
             if (Time.timeSinceLevelLoad < StartBufferTime)
                 return;
             CardGameManager.Instance.Messenger.Show("Edit is Coming Soon!");
-            // TODO: Creator.Edit();
         }
 
         [UsedImplicitly]
@@ -337,6 +348,7 @@ namespace Cgs.Menu
 #endif
         }
 
+        // ReSharper disable once MemberCanBeMadeStatic.Local
         private void Quit() =>
 #if UNITY_EDITOR
             EditorApplication.isPlaying = false;

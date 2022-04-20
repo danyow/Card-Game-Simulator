@@ -1,8 +1,18 @@
-name: Test, Build, and Release CGS
+name: Test, Build, and Deploy with GameCI
 on:
   push:
     branches:
       - develop
+    paths:
+      - 'Assets/**'
+      - 'Packages/**'
+      - 'ProjectSettings/**'
+  pull_request:
+    types:
+      - opened
+    branches:    
+      - develop
+      - main
     paths:
       - 'Assets/**'
       - 'Packages/**'
@@ -13,7 +23,7 @@ on:
   workflow_dispatch:
     inputs:
       workflow_mode:
-        description: '[release] [Android, iOS, StandaloneOSX, StandaloneLinux64, WebGL, StandaloneWindows, WSAPlayer, StandaloneWindows64, Steam]'
+        description: '[release] [Android, iOS, StandaloneLinux64, WebGL, StandaloneWindows, StandaloneWindows64, WSAPlayer, StandaloneOSX, Steam]'
         required: false
         default: ''
 
@@ -25,23 +35,83 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
+          fetch-depth: 0
           lfs: true
       - name: Cache Library
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           path: Library
           key: Library-test-${{ hashFiles('Assets/**', 'Packages/**', 'ProjectSettings/**') }}
           restore-keys: Library-test-
+      - name: Setup dotnet for SonarQube
+        if: false
+        uses: actions/setup-dotnet@v2
+        with:
+          dotnet-version: '5.0.x'
+      - name: Set up JDK 11 for SonarQube
+        if: false
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'zulu'
+          java-version: 11
+      - name: Setup Unity for SonarQube
+        if: false
+        id: setup-unity
+        uses: kuler90/setup-unity@v1
+      - name: Activate Unity for SonarQube
+        if: false
+        uses: kuler90/activate-unity@v1
+        with:
+          unity-username: ${{ secrets.UNITY_EMAIL }}
+          unity-password: ${{ secrets.UNITY_PASSWORD }}
+          unity-serial: ${{ secrets.UNITY_SERIAL }}
+      - name: Generate Solution for SonarQube
+        if: false
+        run: xvfb-run -ae /dev/stdout ${{ steps.setup-unity.outputs.unity-path }} -batchmode -logFile /dev/stdout -quit -customBuildName Card-Game-Simulator -projectPath . -executeMethod  UnityEditor.SyncVS.SyncSolution
       - name: Run Unit Tests
-        uses: game-ci/unity-test-runner@main
+        uses: game-ci/unity-test-runner@v2
         env:
           UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
           UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
           UNITY_SERIAL: ${{ secrets.UNITY_SERIAL }}
         with:
+          customParameters: -enableCodeCoverage -coverageResultsPath artifacts
           githubToken: ${{ secrets.GITHUB_TOKEN }}
+      - name: SonarQube Analysis
+        if: false
+        env:
+          FrameworkPathOverride: ${{ steps.setup-unity.outputs.unity-path }}/../Data/MonoBleedingEdge/
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          pwd; ls -alh
+          sed -i 's/<ReferenceOutputAssembly>false<\/ReferenceOutputAssembly>/<ReferenceOutputAssembly>true<\/ReferenceOutputAssembly>/g' *.csproj
+          sed -i 's/\([A-Za-z0-9.-]\+csproj\)/Card-Game-Simulator\/&/g' Card-Game-Simulator.sln
+          mv Card-Game-Simulator.sln ..
+          cd ..
+          dotnet tool install --global dotnet-sonarscanner
+          dotnet sonarscanner begin \
+            /o:"finol-digital" \
+            /k:"finol-digital_Card-Game-Simulator" \
+            /d:sonar.login="$SONAR_TOKEN" \
+            /d:sonar.host.url=https://sonarcloud.io \
+            /d:sonar.exclusions=Assets/Plugins/**,Assets/Mirror/**, \
+            /d:sonar.cpd.exclusions=Assets/Tests/** \
+            /d:sonar.coverage.exclusions=Assets/Tests/** \
+            /d:sonar.cs.nunit.reportsPaths=Card-Game-Simulator/artifacts/editmode-results.xml,Card-Game-Simulator/artifacts/playmode-results.xml \
+            /d:sonar.cs.opencover.reportsPaths=Card-Game-Simulator/artifacts/Card-Game-Simulator-opencov/EditMode/TestCoverageResults_0000.xml,Card-Game-Simulator/artifacts/Card-Game-Simulator-opencov/PlayMode/TestCoverageResults_0000.xml
+          dotnet build Card-Game-Simulator.sln
+          dotnet sonarscanner end /d:sonar.login="$SONAR_TOKEN"
+          cd Card-Game-Simulator
+      - name: SonarQube Quality Gate Check
+        if: false
+        uses: SonarSource/sonarqube-quality-gate-action@v1.0.0
+        with:
+          scanMetadataReportFile: ../.sonarqube/out/.sonar/report-task.txt
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
       - name: Update Release Notes
         if: github.event.action == 'published'
         env:
@@ -67,9 +137,10 @@ jobs:
         targetPlatform:
           - Android
           - iOS
-          - StandaloneOSX
           - StandaloneLinux64
           - WebGL
+    outputs:
+      buildVersion: ${{ steps.build.outputs.buildVersion }}
     steps:
       - name: Free Disk Space for Android
         if: matrix.targetPlatform == 'Android'
@@ -83,11 +154,11 @@ jobs:
           sudo rm -rf "$AGENT_TOOLSDIRECTORY"
           df -h
       - name: Checkout Repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           fetch-depth: 0
           lfs: true
-      - uses: actions/cache@v2
+      - uses: actions/cache@v3
         with:
           path: Library
           key: Library-build-${{ matrix.targetPlatform }}-${{ hashFiles('Assets/**', 'Packages/**', 'ProjectSettings/**') }}
@@ -95,7 +166,8 @@ jobs:
             Library-build-${{ matrix.targetPlatform }}-
             Library-build-
       - name: Build Unity Project
-        uses: game-ci/unity-builder@main
+        id: build
+        uses: game-ci/unity-builder@v2
         env:
           UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
           UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
@@ -111,7 +183,7 @@ jobs:
           androidKeyaliasPass: ${{ secrets.ANDROID_KEYALIAS_PASS }}
           androidTargetSdkVersion: AndroidApiLevel31
       - name: Upload Build
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         if: github.event.action == 'published' || contains(github.event.inputs.workflow_mode, 'release') || contains(github.event.inputs.workflow_mode, matrix.targetPlatform) || (contains(github.event.inputs.workflow_mode, 'Steam') && matrix.targetPlatform == 'StandaloneLinux64')
         with:
           name: cgs-${{ matrix.targetPlatform }}
@@ -134,50 +206,43 @@ jobs:
 
   buildWithWindows:
     name: Build for ${{ matrix.targetPlatform }}
-    runs-on: windows-latest
+    runs-on: windows-2019
     needs: tests
+    outputs:
+      buildVersion: ${{ steps.build.outputs.buildVersion }}
     strategy:
       fail-fast: false
       matrix:
         targetPlatform:
           - StandaloneWindows
+          - StandaloneWindows64
           - WSAPlayer
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           fetch-depth: 0
           lfs: true
-      - name: Get Version
-        id: versioning
-        uses: paulhatch/semantic-version@v4.0.2
+      - uses: actions/cache@v3
         with:
-          format: "${major}.${minor}.${patch}"
-      - name: Setup Unity IL2CPP
-        uses: kuler90/setup-unity@v1
+          path: Library
+          key: Library-buildWindows-${{ matrix.targetPlatform }}-${{ hashFiles('Assets/**', 'Packages/**', 'ProjectSettings/**') }}
+          restore-keys: |
+            Library-buildWindows-${{ matrix.targetPlatform }}-
+            Library-buildWindows-
+      - name: Build Unity Project
+        id: build
+        uses: game-ci/unity-builder@v2
+        env:
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+          UNITY_SERIAL: ${{ secrets.UNITY_SERIAL }}
         with:
-          unity-modules: windows-il2cpp
-      - name: Setup Unity UWP
-        uses: kuler90/setup-unity@v1
-        if: matrix.targetPlatform == 'WSAPlayer'
-        with:
-          unity-modules: universal-windows-platform
-      - name: Activate Unity
-        uses: kuler90/activate-unity@v1
-        with:
-          unity-username: ${{ secrets.UNITY_EMAIL_2 }}
-          unity-password: ${{ secrets.UNITY_PASSWORD_2 }}
-          unity-serial: ${{ secrets.UNITY_SERIAL_2 }}
-      - name: Build Unity
-        uses: kuler90/build-unity@v1
-        with:
-          build-path: build/${{ matrix.targetPlatform }}
-          build-target: ${{ matrix.targetPlatform }}
-          build-method: Cgs.Editor.BuildCgs.BuildOptions
-          build-version: ${{ steps.versioning.outputs.version }}
+          targetPlatform: ${{ matrix.targetPlatform }}
+          buildMethod: Cgs.Editor.BuildCgs.BuildOptions
       - name: Upload Build
-        uses: actions/upload-artifact@v2
-        if: github.event.action == 'published' || contains(github.event.inputs.workflow_mode, 'release') || contains(github.event.inputs.workflow_mode, matrix.targetPlatform) || (contains(github.event.inputs.workflow_mode, 'Steam') && matrix.targetPlatform == 'StandaloneWindows64')
+        uses: actions/upload-artifact@v3
+        if: github.event.action == 'published' || contains(github.event.inputs.workflow_mode, 'release') || contains(github.event.inputs.workflow_mode, matrix.targetPlatform) || (contains(github.event.inputs.workflow_mode, 'Steam') && contains(matrix.targetPlatform, 'StandaloneWindows'))
         with:
           name: cgs-${{ matrix.targetPlatform }}
           path: build/${{ matrix.targetPlatform }}
@@ -198,71 +263,86 @@ jobs:
           overwrite: true
           body: ${{ github.event.release.body }}
 
-  buildWithWindows2:
-    name: Build for StandaloneWindows64
-    runs-on: windows-latest
-    needs: buildWithWindows
-    if: github.event.action == 'published' || contains(github.event.inputs.workflow_mode, 'release') || contains(github.event.inputs.workflow_mode, 'StandaloneWindows64') || contains(github.event.inputs.workflow_mode, 'Steam')
+  buildWithMac:
+    name: Build for StandaloneOSX
+    runs-on: macos-latest
+    needs: buildWithLinux
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           fetch-depth: 0
           lfs: true
-      - name: Get Version
-        id: versioning
-        uses: paulhatch/semantic-version@v4.0.2
+      - uses: actions/cache@v3
         with:
-          format: "${major}.${minor}.${patch}"
-      - name: Setup Unity IL2CPP
-        uses: kuler90/setup-unity@v1
+          path: Library
+          key: Library-buildMac-${{ hashFiles('Assets/**', 'Packages/**', 'ProjectSettings/**') }}
+          restore-keys: Library-buildMac-
+      - name: Build Unity Project
+        uses: game-ci/unity-builder@v2
+        env:
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+          UNITY_SERIAL: ${{ secrets.UNITY_SERIAL }}
         with:
-          unity-modules: windows-il2cpp
-      - name: Activate Unity
-        uses: kuler90/activate-unity@v1
-        with:
-          unity-username: ${{ secrets.UNITY_EMAIL_2 }}
-          unity-password: ${{ secrets.UNITY_PASSWORD_2 }}
-          unity-serial: ${{ secrets.UNITY_SERIAL_2 }}
-      - name: Build Unity
-        uses: kuler90/build-unity@v1
-        with:
-          build-path: build/StandaloneWindows64
-          build-target: StandaloneWindows64
-          build-method: Cgs.Editor.BuildCgs.BuildOptions
-          build-version: ${{ steps.versioning.outputs.version }}
+          targetPlatform: StandaloneOSX
+          buildMethod: Cgs.Editor.BuildCgs.BuildOptions
+      - name: Fix File Permissions and Code-Sign
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_TEAM_NAME: ${{ secrets.APPLE_TEAM_NAME }}
+          APPLE_DISTRIBUTION_CERTIFICATE: ${{ secrets.APPLE_DISTRIBUTION_CERTIFICATE }}
+          APPLE_DISTRIBUTION_PASSWORD: ${{ secrets.APPLE_DISTRIBUTION_PASSWORD }}
+          MAC_INSTALLER_CERTIFICATE: ${{ secrets.MAC_INSTALLER_CERTIFICATE }}
+          MAC_INSTALLER_PASSWORD: ${{ secrets.MAC_INSTALLER_PASSWORD }}
+          MAC_APP_BUNDLE_PATHS: Contents/PlugIns/StandaloneFileBrowser.bundle
+          MAC_BUILD_PATH: ${{ format('{0}/build/StandaloneOSX', github.workspace) }}
+          PROJECT_NAME: Card Game Simulator
+        run: |
+          bundle install
+          bundle exec fastlane mac fixversion
+          find $MAC_BUILD_PATH -type f -name "**.sh" -exec chmod +x {} \;
+          chmod +x fastlane/sign-mac-build.sh
+          ./fastlane/sign-mac-build.sh
       - name: Upload Build
-        uses: actions/upload-artifact@v2
+        if: github.event.action == 'published' || (contains(github.event.inputs.workflow_mode, 'release') && contains(github.event.inputs.workflow_mode, 'StandaloneOSX'))
+        uses: actions/upload-artifact@v3
         with:
-          name: cgs-StandaloneWindows64
-          path: build/StandaloneWindows64
-      - name: Zip Build
+          name: cgs-StandaloneOSX
+          path: build/StandaloneOSX
+      - name: Upload App
+        uses: actions/upload-artifact@v3
+        if: github.event.action == 'published' || (contains(github.event.inputs.workflow_mode, 'release') && contains(github.event.inputs.workflow_mode, 'Steam'))
+        with:
+          name: Card Game Simulator.app
+          path: build/StandaloneOSX/Card Game Simulator.app
+      - name: Zip App
         uses: vimtor/action-zip@v1
         if: github.event.action == 'published'
         with:
-          files: build/StandaloneWindows64/
-          dest: build/cgs-StandaloneWindows64.zip
+          files: build/StandaloneOSX/
+          dest: build/cgs-StandaloneOSX.zip
       - name: Upload Zip to GitHub Release
         uses: svenstaro/upload-release-action@v2
         if: github.event.action == 'published'
         with:
           repo_token: ${{ secrets.CGS_PAT }}
-          asset_name: cgs-StandaloneWindows64.zip
-          file: build/cgs-StandaloneWindows64.zip
+          asset_name: cgs-StandaloneOSX.zip
+          file: build/cgs-StandaloneOSX.zip
           tag: ${{ github.ref }}
           overwrite: true
           body: ${{ github.event.release.body }}
 
-  releaseToGooglePlay:
-    name: Release to the Google Play Store
+  deployToGooglePlay:
+    name: Deploy to the Google Play Store
     runs-on: ubuntu-latest
     needs: buildWithLinux
     if: github.event.action == 'published' || (contains(github.event.inputs.workflow_mode, 'release') && contains(github.event.inputs.workflow_mode, 'Android'))
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
       - name: Download Android Artifact
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v3
         with:
           name: cgs-Android
           path: build/Android
@@ -286,20 +366,20 @@ jobs:
           GOOGLE_PLAY_KEY_FILE_PATH: ${{ format('{0}/fastlane/api-finoldigital.json', github.workspace) }}
           ANDROID_BUILD_FILE_PATH: ${{ format('{0}/build/Android/Android.aab', github.workspace) }}
           ANDROID_PACKAGE_NAME: com.finoldigital.cardgamesim
-        uses: maierj/fastlane-action@v2.0.1
+        uses: maierj/fastlane-action@v2.2.0
         with:
           lane: 'android playprod'
 
-  releaseToAppStore:
-    name: Release to the App Store
+  deployToAppStore:
+    name: Deploy to the App Store
     runs-on: macos-latest
     needs: buildWithLinux
     if: github.event.action == 'published' || (contains(github.event.inputs.workflow_mode, 'release') && contains(github.event.inputs.workflow_mode, 'iOS'))
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
       - name: Download iOS Artifact
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v3
         with:
           name: cgs-iOS
           path: build/iOS
@@ -308,7 +388,7 @@ jobs:
         env:
           RELEASE_NOTES: ${{ github.event.release.body }}
         run: echo "$RELEASE_NOTES" > fastlane/metadata/en-US/release_notes.txt
-      - name: Fix File Permissions, Code-Sign, and Run Fastlane
+      - name: Fix File Permissions and Run Fastlane
         env:
           APPLE_CONNECT_EMAIL: ${{ secrets.APPLE_CONNECT_EMAIL }}
           APPLE_DEVELOPER_EMAIL: ${{ secrets.APPLE_DEVELOPER_EMAIL }}
@@ -321,8 +401,8 @@ jobs:
           APPSTORE_ISSUER_ID: ${{ secrets.APPSTORE_ISSUER_ID }}
           APPSTORE_P8: ${{ secrets.APPSTORE_P8 }}
           USYM_UPLOAD_AUTH_TOKEN: ${{ secrets.USYM_UPLOAD_AUTH_TOKEN }}
-          IOS_APP_ID: com.finoldigital.CardGameSim
           IOS_BUILD_PATH: ${{ format('{0}/build/iOS', github.workspace) }}
+          IOS_BUNDLE_ID: com.finoldigital.CardGameSim
           PROJECT_NAME: Card Game Simulator
         run: |
           find $IOS_BUILD_PATH -type f -name "**.sh" -exec chmod +x {} \;
@@ -330,83 +410,16 @@ jobs:
           bundle install
           bundle exec fastlane ios release
 
-  releaseToMacAppStore:
-    name: Release to the Mac App Store
-    runs-on: macos-latest
-    needs: buildWithLinux
-    env:
-      APPLE_CONNECT_EMAIL: ${{ secrets.APPLE_CONNECT_EMAIL }}
-      APPLE_DEVELOPER_EMAIL: ${{ secrets.APPLE_DEVELOPER_EMAIL }}
-      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-      APPLE_TEAM_NAME: ${{ secrets.APPLE_TEAM_NAME }}
-      APPLE_DISTRIBUTION_CERTIFICATE: ${{ secrets.APPLE_DISTRIBUTION_CERTIFICATE }}
-      APPLE_DISTRIBUTION_PASSWORD: ${{ secrets.APPLE_DISTRIBUTION_PASSWORD }}
-      MAC_INSTALLER_CERTIFICATE: ${{ secrets.MAC_INSTALLER_CERTIFICATE }}
-      MAC_INSTALLER_PASSWORD: ${{ secrets.MAC_INSTALLER_PASSWORD }}
-      APPSTORE_KEY_ID: ${{ secrets.APPSTORE_KEY_ID }}
-      APPSTORE_ISSUER_ID: ${{ secrets.APPSTORE_ISSUER_ID }}
-      APPSTORE_P8: ${{ secrets. APPSTORE_P8 }}
-      MAC_APP_BUNDLE_PATHS: Contents/PlugIns/StandaloneFileBrowser.bundle
-      MAC_APP_ID: com.finoldigital.CardGameSimulator
-      MAC_BUILD_PATH: ${{ format('{0}/build/StandaloneOSX', github.workspace) }}
-      PROJECT_NAME: Card Game Simulator
-    if: github.event.action == 'published' || (contains(github.event.inputs.workflow_mode, 'release') && (contains(github.event.inputs.workflow_mode, 'StandaloneOSX') || contains(github.event.inputs.workflow_mode, 'Steam')))
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v2
-      - name: Download StandaloneOSX Artifact
-        uses: actions/download-artifact@v2
-        with:
-          name: cgs-StandaloneOSX
-          path: build/StandaloneOSX
-      - name: Update Release Notes
-        if: github.event.action == 'published'
-        env:
-          RELEASE_NOTES: ${{ github.event.release.body }}
-        run: echo "$RELEASE_NOTES" > fastlane/metadata/en-US/release_notes.txt
-      - name: Fix File Permissions and Code-Sign
-        run: |
-          bundle install
-          bundle exec fastlane mac fixversion
-          find $MAC_BUILD_PATH -type f -name "**.sh" -exec chmod +x {} \;
-          chmod +x fastlane/sign-mac-build.sh
-          ./fastlane/sign-mac-build.sh
-      - name: Run Fastlane
-        if: github.event.action == 'published' || (contains(github.event.inputs.workflow_mode, 'release') && contains(github.event.inputs.workflow_mode, 'StandaloneOSX'))
-        run: bundle exec fastlane mac macupload
-      - name: Upload Build
-        uses: actions/upload-artifact@v2
-        if: github.event.action == 'published' || (contains(github.event.inputs.workflow_mode, 'release') && contains(github.event.inputs.workflow_mode, 'Steam'))
-        with:
-          name: Card Game Simulator.app
-          path: build/StandaloneOSX/Card Game Simulator.app
-      - name: Zip App
-        uses: vimtor/action-zip@v1
-        if: github.event.action == 'published'
-        with:
-          files: build/StandaloneOSX/
-          dest: build/cgs-StandaloneOSX.zip
-      - name: Upload App to GitHub Release
-        uses: svenstaro/upload-release-action@v2
-        if: github.event.action == 'published'
-        with:
-          repo_token: ${{ secrets.CGS_PAT }}
-          asset_name: cgs-StandaloneOSX.zip
-          file: build/cgs-StandaloneOSX.zip
-          tag: ${{ github.ref }}
-          overwrite: true
-          body: ${{ github.event.release.body }}
-
-  releaseToGitHubPages:
-    name: Release to the Web via GitHub Pages
+  deployToGitHubPages:
+    name: Deploy to the Web via GitHub Pages
     runs-on: ubuntu-latest
     needs: buildWithLinux
     if: github.event.action == 'published' || (contains(github.event.inputs.workflow_mode, 'release') && contains(github.event.inputs.workflow_mode, 'WebGL'))
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
       - name: Download WebGL Artifact
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v3
         with:
           name: cgs-WebGL
           path: build/WebGL
@@ -422,78 +435,30 @@ jobs:
           file_pattern: docs/**
           commit_message: Deploy to GitHub Pages
 
-  releaseToMicrosoftStore:
-    name: Release to the Microsoft Store
-    runs-on: windows-latest
+  deployToMicrosoftStore:
+    name: Deploy to the Microsoft Store
+    runs-on: windows-2019
     needs: buildWithWindows
     if: github.event.action == 'published' || (contains(github.event.inputs.workflow_mode, 'release') && contains(github.event.inputs.workflow_mode, 'WSAPlayer'))
-    env:
-      Wap_Project_Directory: build\WSAPlayer\Card Game Simulator
-      SigningCertificate: Card Game Simulator_StoreKey.pfx
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v2
-        with:
-          fetch-depth: 0
+      - name: Checkout Card-Game-Simulator
+        run: |
+          mkdir C:/Card-Game-Simulator.git
+          git clone https://github.com/finol-digital/Card-Game-Simulator.git C:/Card-Game-Simulator.git --depth 1
       - name: Download WSAPlayer Artifact
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v3
         with:
           name: cgs-WSAPlayer
-          path: build/WSAPlayer
+          path: C:/Card-Game-Simulator.git/build
       - name: Update Release Notes
+        working-directory: C:/Card-Game-Simulator.git
         if: github.event.action == 'published'
         shell: bash
         env:
           RELEASE_NOTES: ${{ github.event.release.body }}
         run: echo "$RELEASE_NOTES" > fastlane/metadata/en-US/release_notes.txt
-      - name: Setup Unity IL2CPP
-        uses: kuler90/setup-unity@v1
-        with:
-          unity-modules: windows-il2cpp
-      - name: Setup Unity UWP
-        uses: kuler90/setup-unity@v1
-        with:
-          unity-modules: universal-windows-platform
-      - uses: ilammy/msvc-dev-cmd@v1
-      - name: Setup MSBuild
-        uses: microsoft/setup-msbuild@v1
-      - name: Remove spaces from project name
-        uses: davidmfinol/replace-action@master
-        with:
-          files: "build/WSAPlayer/Card Game Simulator.sln"
-          replacements: "\"Card Game Simulator\"=\"CardGameSimulator\""
-      - name: Remove spaces from project name 2
-        uses: davidmfinol/replace-action@master
-        with:
-          files: "build/WSAPlayer/Card Game Simulator/Card Game Simulator.vcxproj"
-          replacements: "</PropertyGroup>=<ProjectName>CardGameSimulator</ProjectName></PropertyGroup>"
-      - name: Restore the Wpf application to populate the obj folder
-        shell: pwsh
-        env:
-          SolutionPath: build\WSAPlayer\Card Game Simulator.sln
-          Configuration: Master
-          RuntimeIdentifier: win-x64
-        run: msbuild $env:SolutionPath /t:Restore /p:Configuration=$env:Configuration /p:RuntimeIdentifier=$env:RuntimeIdentifier
-      - name: Decode the Pfx
-        shell: pwsh
-        run: |
-          $pfx_cert_byte = [System.Convert]::FromBase64String("${{ secrets.MICROSOFT_STORE_PFX_FILE }}")
-          $currentDirectory = Get-Location
-          $certificatePath = Join-Path -Path $currentDirectory -ChildPath $env:Wap_Project_Directory -AdditionalChildPath $env:SigningCertificate
-          [IO.File]::WriteAllBytes("$certificatePath", $pfx_cert_byte)
-      - name: Build the .appxupload
-        shell: pwsh
-        env:
-          SolutionPath: build\WSAPlayer\Card Game Simulator.sln
-          Configuration: Master
-          TargetPlatform: x64
-          BuildMode: StoreUpload
-          AppxBundle: Always
-        run: msbuild $env:SolutionPath /p:Configuration=$env:Configuration /p:Platform=$env:TargetPlatform /p:UapAppxPackageBuildMode=$env:BuildMode /p:AppxBundle=$env:AppxBundle
-      - name: Remove the .pfx
-        shell: pwsh
-        run: Remove-Item -path $env:Wap_Project_Directory\$env:SigningCertificate
       - name: Get Release Notes
+        working-directory: C:/Card-Game-Simulator.git
         id: changelog
         shell: bash
         run: |
@@ -506,32 +471,82 @@ jobs:
       - name: Apply Release Notes
         uses: davidmfinol/replace-action@master
         with:
-          files: "storebroker/en-us/PDP.xml"
+          files: "C:/Card-Game-Simulator.git/storebroker/en-us/PDP.xml"
           replacements: "OUTPUT_RELEASE_NOTES=${{ steps.changelog.outputs.RELEASE_NOTES }}"
-      - name: Get Version
-        id: versioning
-        uses: paulhatch/semantic-version@v4.0.2
+      - name: Setup Unity UWP
+        uses: kuler90/setup-unity@v1
         with:
-          format: "${major}.${minor}.${patch}"
+          unity-modules: universal-windows-platform
+          project-path: C:/Card-Game-Simulator.git
+      - name: Setup Developer Command Prompt for Microsoft Visual C++
+        uses: ilammy/msvc-dev-cmd@v1
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v1
+      - name: Remove spaces from project name
+        uses: davidmfinol/replace-action@master
+        with:
+          files: "C:/Card-Game-Simulator.git/build/WSAPlayer/Card Game Simulator.sln"
+          replacements: "\"Card Game Simulator\"=\"CardGameSimulator\""
+      - name: Remove spaces from project name 2
+        uses: davidmfinol/replace-action@master
+        with:
+          files: "C:/Card-Game-Simulator.git/build/WSAPlayer/Card Game Simulator/Card Game Simulator.vcxproj"
+          replacements: "</PropertyGroup>=<ProjectName>CardGameSimulator</ProjectName></PropertyGroup>"
+      - name: Update manifest name
+        working-directory: C:/Card-Game-Simulator.git
+        shell: pwsh
+        env:
+          UwpProjectDirectory: build\WSAPlayer\Card Game Simulator
+        run: |
+          [xml]$manifest = get-content ".\$env:UwpProjectDirectory\Package.appxmanifest"
+          $manifest.Package.Identity.Name = "FinolDigitalLLC.CardGameSimulator"
+          $manifest.Package.Identity.Publisher = "CN=BBF9912B-079E-4CCE-A441-0D6EA6798115"
+          $manifest.save(".\$env:UwpProjectDirectory\Package.appxmanifest")
+      - name: Decode the Pfx
+        working-directory: C:/Card-Game-Simulator.git
+        shell: pwsh
+        env:
+          UwpProjectDirectory: build\WSAPlayer\Card Game Simulator
+          SigningCertificate: Card Game Simulator_StoreKey.pfx
+        run: |
+          $pfx_cert_byte = [System.Convert]::FromBase64String("${{ secrets.MICROSOFT_STORE_PFX_FILE }}")
+          $currentDirectory = Get-Location
+          $certificatePath = Join-Path -Path $currentDirectory -ChildPath $env:UwpProjectDirectory -AdditionalChildPath $env:SigningCertificate
+          [IO.File]::WriteAllBytes("$certificatePath", $pfx_cert_byte)
+      - name: Build the .appxupload
+        working-directory: C:/Card-Game-Simulator.git
+        shell: pwsh
+        env:
+          SolutionPath: build\WSAPlayer\Card Game Simulator.sln
+          SigningCertificate: Card Game Simulator_StoreKey.pfx
+        run: msbuild $env:SolutionPath /p:Configuration="Master" /p:Platform="x64" /p:UapAppxPackageBuildMode="StoreUpload" /p:AppxBundle="Always" /p:AppxBundlePlatforms="x86|x64|arm" /p:PackageCertificateKeyFile=$env:SigningCertificate
+      - name: Remove the .pfx
+        working-directory: C:/Card-Game-Simulator.git
+        shell: pwsh
+        env:
+          UwpProjectDirectory: build\WSAPlayer\Card Game Simulator
+          SigningCertificate: Card Game Simulator_StoreKey.pfx
+        run: Remove-Item -path $env:UwpProjectDirectory\$env:SigningCertificate
       - name: Upload .appxupload
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
-          name: ${{ format('CardGameSimulator_{0}.0_x64_bundle_Master.appxupload', steps.versioning.outputs.version) }}
-          path: ${{ format('{0}\build\WSAPlayer\AppPackages\CardGameSimulator\CardGameSimulator_{1}.0_x64_bundle_Master.appxupload', github.workspace, steps.versioning.outputs.version) }}
+          name: ${{ format('CardGameSimulator_{0}.0_x64_bundle_Master.appxupload', needs.buildWithWindows.outputs.buildVersion) }}
+          path: ${{ format('{0}\build\WSAPlayer\AppPackages\CardGameSimulator\CardGameSimulator_{1}.0_x64_bundle_Master.appxupload', 'C:\Card-Game-Simulator.git', needs.buildWithWindows.outputs.buildVersion) }}
       - name: Upload to the Microsoft Store
+        working-directory: C:/Card-Game-Simulator.git
         shell: pwsh
         env:
           MICROSOFT_TENANT_ID: ${{ secrets.MICROSOFT_TENANT_ID }}
           MICROSOFT_CLIENT_ID: ${{ secrets.MICROSOFT_CLIENT_ID }}
           MICROSOFT_KEY: ${{ secrets.MICROSOFT_KEY }}
           MICROSOFT_APP_ID: 9N96N5S4W3J0
-          STOREBROKER_CONFIG_PATH: ${{ format('{0}\storebroker\SBConfig.json', github.workspace) }}
-          PDP_ROOT_PATH: ${{ format('{0}\storebroker\', github.workspace) }}
-          IMAGES_ROOT_PATH: ${{ format('{0}\docs\assets\img\', github.workspace) }}
-          APPX_PATH: ${{ format('{0}\build\WSAPlayer\AppPackages\CardGameSimulator\CardGameSimulator_{1}.0_x64_bundle_Master.appxupload', github.workspace, steps.versioning.outputs.version) }}
-          OUT_PATH: ${{ format('{0}\build\WSAPlayer\', github.workspace) }}
-          SUBMISSION_DATA_PATH: ${{ format('{0}\build\WSAPlayer\upload.json', github.workspace) }}
-          PACKAGE_PATH: ${{ format('{0}\build\WSAPlayer\upload.zip', github.workspace) }}
+          STOREBROKER_CONFIG_PATH: ${{ format('{0}\storebroker\SBConfig.json', 'C:\Card-Game-Simulator.git') }}
+          PDP_ROOT_PATH: ${{ format('{0}\storebroker\', 'C:\Card-Game-Simulator.git') }}
+          IMAGES_ROOT_PATH: ${{ format('{0}\docs\assets\img\', 'C:\Card-Game-Simulator.git') }}
+          APPX_PATH: ${{ format('{0}\build\WSAPlayer\AppPackages\CardGameSimulator\CardGameSimulator_{1}.0_x64_bundle_Master.appxupload', 'C:\Card-Game-Simulator.git', needs.buildWithWindows.outputs.buildVersion) }}
+          OUT_PATH: ${{ format('{0}\build\WSAPlayer\', 'C:\Card-Game-Simulator.git') }}
+          SUBMISSION_DATA_PATH: ${{ format('{0}\build\WSAPlayer\upload.json', 'C:\Card-Game-Simulator.git') }}
+          PACKAGE_PATH: ${{ format('{0}\build\WSAPlayer\upload.zip', 'C:\Card-Game-Simulator.git') }}
         run: |
           Install-Module -Name StoreBroker -AcceptLicense -Force
           $pass = ConvertTo-SecureString $env:MICROSOFT_KEY -AsPlainText -Force
@@ -540,41 +555,68 @@ jobs:
           New-SubmissionPackage -ConfigPath $env:STOREBROKER_CONFIG_PATH -PDPRootPath $env:PDP_ROOT_PATH -ImagesRootPath $env:IMAGES_ROOT_PATH -AppxPath $env:APPX_PATH -OutPath $env:OUT_PATH -OutName 'upload' -Verbose
           Update-ApplicationSubmission -AppId $env:MICROSOFT_APP_ID -SubmissionDataPath $env:SUBMISSION_DATA_PATH -PackagePath $env:PACKAGE_PATH -ReplacePackages -UpdateListings -AutoCommit -Force
 
-  releaseToSteam:
-    name: Release to Steam
+  deployToMacAppStore:
+    name: Deploy to the Mac App Store
+    runs-on: macos-latest
+    needs: buildWithMac
+    if: github.event.action == 'published' || (contains(github.event.inputs.workflow_mode, 'release') && contains(github.event.inputs.workflow_mode, 'StandaloneOSX'))
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+      - name: Download iOS Artifact
+        uses: actions/download-artifact@v3
+        with:
+          name: cgs-StandaloneOSX
+          path: build/StandaloneOSX
+      - name: Update Release Notes
+        if: github.event.action == 'published'
+        env:
+          RELEASE_NOTES: ${{ github.event.release.body }}
+        run: echo "$RELEASE_NOTES" > fastlane/metadata/en-US/release_notes.txt
+      - name: Run Fastlane
+        env:
+          APPLE_CONNECT_EMAIL: ${{ secrets.APPLE_CONNECT_EMAIL }}
+          APPLE_DEVELOPER_EMAIL: ${{ secrets.APPLE_DEVELOPER_EMAIL }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_TEAM_NAME: ${{ secrets.APPLE_TEAM_NAME }}
+          APPSTORE_KEY_ID: ${{ secrets.APPSTORE_KEY_ID }}
+          APPSTORE_ISSUER_ID: ${{ secrets.APPSTORE_ISSUER_ID }}
+          APPSTORE_P8: ${{ secrets. APPSTORE_P8 }}
+          MAC_BUILD_PATH: ${{ format('{0}/build/StandaloneOSX', github.workspace) }}
+          MAC_BUNDLE_ID: com.finoldigital.CardGameSimulator
+          PROJECT_NAME: Card Game Simulator
+        run: |
+          bundle install
+          bundle exec fastlane mac macupload
+
+  deployToSteam:
+    name: Deploy to Steam
     runs-on: ubuntu-latest
-    needs: [buildWithLinux, buildWithWindows, buildWithWindows2, releaseToMacAppStore]
+    needs: [buildWithLinux, buildWithWindows, buildWithMac]
     if: github.event.action == 'published' || (contains(github.event.inputs.workflow_mode, 'release') && contains(github.event.inputs.workflow_mode, 'Steam'))
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v2
-        with:
-          fetch-depth: 0
+        uses: actions/checkout@v3
       - name: Download StandaloneWindows Artifact
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v3
         with:
           name: cgs-StandaloneWindows
           path: build/StandaloneWindows
       - name: Download StandaloneLinux64 Artifact
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v3
         with:
           name: cgs-StandaloneLinux64
           path: build/StandaloneLinux64
       - name: Download StandaloneWindows64 Artifact
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v3
         with:
           name: cgs-StandaloneWindows64
           path: build/StandaloneWindows64
       - name: Download App
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v3
         with:
           name: Card Game Simulator.app
           path: build/StandaloneOSX/Card Game Simulator.app
-      - name: Get Version
-        id: versioning
-        uses: paulhatch/semantic-version@v4.0.2
-        with:
-          format: "${major}.${minor}.${patch}"
       - name: Deploy to Steam
         uses: game-ci/steam-deploy@v1
         with:
@@ -584,7 +626,7 @@ jobs:
           ssfnFileName: ${{ secrets.STEAM_SSFN_FILE_NAME }}
           ssfnFileContents: ${{ secrets.STEAM_SSFN_FILE_CONTENTS }}
           appId: 1742850
-          buildDescription: v${{ steps.versioning.outputs.version }}
+          buildDescription: v${{ needs.buildWithLinux.outputs.buildVersion }}
           rootPath: build
           depot1Path: StandaloneWindows
           depot2Path: StandaloneLinux64
@@ -595,22 +637,16 @@ jobs:
   announceReleaseToSocialMedia:
     name: Announce Release to Social Media
     runs-on: ubuntu-latest
-    needs: [releaseToGooglePlay, releaseToAppStore, releaseToMacAppStore, releaseToGitHubPages, releaseToSteam, releaseToMicrosoftStore]
+    needs: [buildWithLinux, deployToGooglePlay, deployToAppStore, deployToGitHubPages, deployToMicrosoftStore, deployToMacAppStore, deployToSteam]
+    if: github.event.action == 'published'
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v2
-        with:
-          fetch-depth: 0
-      - name: Get Version
-        id: versioning
-        uses: paulhatch/semantic-version@v4.0.2
-        with:
-          format: "${major}.${minor}.${patch}"
+        uses: actions/checkout@v3
       - name: Prepare Announcement
         id: prepare
         shell: bash
         env:
-          VERSION: v${{ steps.versioning.outputs.version }}
+          VERSION: v${{ needs.buildWithLinux.outputs.buildVersion }}
           RELEASE_NOTES: ${{ github.event.release.body }}
         run: |
           export ANNOUNCEMENT="Released CGS $VERSION! $RELEASE_NOTES"

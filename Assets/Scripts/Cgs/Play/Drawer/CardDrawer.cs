@@ -7,10 +7,12 @@ using System.Linq;
 using CardGameDef.Unity;
 using Cgs.CardGameView;
 using Cgs.CardGameView.Multiplayer;
+using Cgs.CardGameView.Viewer;
 using Cgs.Play.Multiplayer;
 using JetBrains.Annotations;
 using UnityEngine;
 using UnityEngine.UI;
+using UnityExtensionMethods;
 
 namespace Cgs.Play.Drawer
 {
@@ -22,6 +24,9 @@ namespace Cgs.Play.Drawer
         private const float HandleHeight = 100.0f;
 
         public static readonly Vector2 ShownPosition = Vector2.zero;
+
+        private static Vector2 MidPosition =>
+            new Vector2(0, -(CardGameManager.PixelsPerInch * CardGameManager.Current.CardSize.Y) / 2 - 10);
 
         public static Vector2 HiddenPosition =>
             new Vector2(0, -(CardGameManager.PixelsPerInch * CardGameManager.Current.CardSize.Y) - 10);
@@ -57,6 +62,7 @@ namespace Cgs.Play.Drawer
             _nameTexts.Add(handNameText);
             _countTexts.Add(handCountText);
 
+            _toggles[0].GetComponent<CardDropArea>().Index = 0;
             _toggles[0].onValueChanged.AddListener(isOn =>
             {
                 if (isOn)
@@ -80,18 +86,27 @@ namespace Cgs.Play.Drawer
 
         private void Resize()
         {
-            float cardHeight = CardGameManager.Current.CardSize.Y * CardGameManager.PixelsPerInch;
+            var cardHeight = CardGameManager.Current.CardSize.Y * CardGameManager.PixelsPerInch;
             panelRectTransform.sizeDelta = new Vector2(panelRectTransform.sizeDelta.x, HandleHeight + cardHeight);
             cardZonesRectTransform.sizeDelta = new Vector2(cardZonesRectTransform.sizeDelta.x, cardHeight);
-            foreach (RectTransform cardZoneRectTransform in cardZoneRectTransforms)
+            foreach (var cardZoneRectTransform in cardZoneRectTransforms)
                 cardZoneRectTransform.sizeDelta = new Vector2(cardZoneRectTransform.sizeDelta.x, cardHeight);
         }
 
+        [UsedImplicitly]
         public void Show()
         {
             panelRectTransform.anchoredPosition = ShownPosition;
             downButton.interactable = true;
             upButton.interactable = false;
+        }
+
+        [UsedImplicitly]
+        public void SemiShow()
+        {
+            panelRectTransform.anchoredPosition = MidPosition;
+            downButton.interactable = true;
+            upButton.interactable = true;
         }
 
         public void AddCard(UnityCard card)
@@ -102,12 +117,12 @@ namespace Cgs.Play.Drawer
         [UsedImplicitly]
         public void AddTab()
         {
-            Vector2 sizeDelta = tabsRectTransform.sizeDelta;
-            sizeDelta = new Vector2(sizeDelta.x + ((RectTransform)tabPrefab.transform).sizeDelta.x, sizeDelta.y);
+            var sizeDelta = tabsRectTransform.sizeDelta;
+            sizeDelta = new Vector2(sizeDelta.x + ((RectTransform) tabPrefab.transform).sizeDelta.x, sizeDelta.y);
             tabsRectTransform.sizeDelta = sizeDelta;
 
             var tabTemplate = Instantiate(tabPrefab, tabsRectTransform).GetComponent<TabTemplate>();
-            int tabIndex = tabsRectTransform.childCount - 2;
+            var tabIndex = tabsRectTransform.childCount - 2;
             tabTemplate.transform.SetSiblingIndex(tabIndex);
 
             _toggles.Add(tabTemplate.toggle);
@@ -123,14 +138,19 @@ namespace Cgs.Play.Drawer
 
             tabTemplate.drawerHandle.cardDrawer = this;
 
+            var tabCardDropArea = _toggles[tabIndex].GetComponent<CardDropArea>();
+            tabCardDropArea.DropHandler = viewer;
+            tabCardDropArea.Index = tabIndex;
+            viewer.drops.Add(tabCardDropArea);
+
             var cardZoneRectTransform = (RectTransform) Instantiate(cardZonePrefab, cardZonesRectTransform).transform;
-            float cardHeight = CardGameManager.Current.CardSize.Y * CardGameManager.PixelsPerInch;
+            var cardHeight = CardGameManager.Current.CardSize.Y * CardGameManager.PixelsPerInch;
             cardZoneRectTransform.sizeDelta = new Vector2(cardZoneRectTransform.sizeDelta.x, cardHeight);
             cardZoneRectTransforms.Add(cardZoneRectTransform);
 
-            var cardDropArea = cardZoneRectTransform.GetComponent<CardDropArea>();
-            cardDropArea.DropHandler = viewer;
-            viewer.drops.Add(cardDropArea);
+            var cardZoneCardDropArea = cardZoneRectTransform.GetComponent<CardDropArea>();
+            cardZoneCardDropArea.DropHandler = viewer;
+            viewer.drops.Add(cardZoneCardDropArea);
 
             CgsNetManager.Instance.LocalPlayer.RequestNewHand(DefaultDrawerName);
         }
@@ -140,25 +160,42 @@ namespace Cgs.Play.Drawer
         {
             for (var i = 0; i < cardZoneRectTransforms.Count; i++)
                 cardZoneRectTransforms[i].gameObject.SetActive(i == tabIndex);
-            CgsNetManager.Instance.LocalPlayer.RequestUseHand(tabIndex);
+
             var cardZone = cardZoneRectTransforms[tabIndex].GetComponentInChildren<CardZone>();
-            viewer.Sync(tabIndex, cardZone,
-                _nameTexts[tabIndex], _countTexts[tabIndex]);
-            SyncNetwork(cardZone.GetComponentsInChildren<CardModel>().Select(cardModel => cardModel.Id).ToArray());
+            var localCardIds = cardZone.GetComponentsInChildren<CardModel>().Select(cardModel => cardModel.Id).ToList();
+            if (CgsNetManager.Instance != null && CgsNetManager.Instance.LocalPlayer != null)
+            {
+                CgsNetManager.Instance.LocalPlayer.RequestUseHand(tabIndex);
+                var serverCards = CgsNetManager.Instance.LocalPlayer.GetHandCards()[tabIndex];
+                var serverCardIds = serverCards.Select(unityCard => unityCard.Id).ToList();
+                if (!localCardIds.SequenceEqual(serverCardIds))
+                {
+                    cardZone.transform.DestroyAllChildren();
+                    foreach (var unityCard in serverCards)
+                    {
+                        var cardModel = Instantiate(viewer.cardModelPrefab, cardZone.transform)
+                            .GetOrAddComponent<CardModel>();
+                        cardModel.Value = unityCard;
+                        var cardTransform = cardModel.transform;
+                        cardTransform.SetAsFirstSibling();
+                        cardTransform.rotation = Quaternion.identity;
+                        cardModel.SetIsFacedown(false);
+                        cardModel.DefaultAction = CardActions.Flip;
+                    }
+                }
+            }
+
+            viewer.Sync(tabIndex, cardZone, _nameTexts[tabIndex], _countTexts[tabIndex]);
         }
 
-        private static void SyncNetwork(string[] cardIds)
+        public void SyncHand(int handIndex, string[] cardIds)
         {
-            if (!CgsNetManager.Instance.isNetworkActive || CgsNetManager.Instance.LocalPlayer == null)
-                return;
-
-            int index = CgsNetManager.Instance.LocalPlayer.CurrentHand;
-            CgsNetManager.Instance.LocalPlayer.RequestSyncHand(index, cardIds);
+            _countTexts[handIndex].text = cardIds.Length.ToString();
         }
 
         public void Clear()
         {
-            foreach (CardZone cardZone in cardZonesRectTransform.GetComponentsInChildren<CardZone>())
+            foreach (var cardZone in cardZonesRectTransform.GetComponentsInChildren<CardZone>())
                 cardZone.Clear();
         }
 

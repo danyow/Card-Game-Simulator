@@ -356,6 +356,12 @@ namespace CardGameDef
         public Float2 PlayMatSize { get; set; } = new Float2(36f, 36f);
 
         [JsonProperty]
+        [Description(
+            "playMatGridCellSize indicates the width and height in inches of each cell in the play area in Play Mode.")]
+        [DefaultValue("(x: 0.5, y: 0.5)")]
+        public Float2 PlayMatGridCellSize { get; set; } = new Float2(0.5f, 0.5f);
+
+        [JsonProperty]
         [Description("rulesUrl should link to this game's online rulebook.")]
         public Uri RulesUrl { get; set; }
 
@@ -402,19 +408,19 @@ namespace CardGameDef
 
         public static (string name, string host) GetNameAndHost(string id)
         {
-            string name = string.IsNullOrEmpty(id) ? DefaultName : id;
-            int hostIndex = name.LastIndexOf('@');
+            var name = string.IsNullOrEmpty(id) ? DefaultName : id;
+            var hostIndex = name.LastIndexOf('@');
             if (hostIndex <= 0)
                 return (name, null);
 
-            string host = name.Substring(hostIndex + 1);
+            var host = name.Substring(hostIndex + 1);
             name = name.Substring(0, hostIndex);
             return (name, host);
         }
 
         public CardGame(string id = DefaultName, string autoUpdateUrl = "")
         {
-            (string name, string host) = GetNameAndHost(id);
+            var (name, host) = GetNameAndHost(id);
             Name = name;
             if (Uri.IsWellFormedUriString(autoUpdateUrl, UriKind.Absolute))
                 AutoUpdateUrl = new Uri(autoUpdateUrl);
