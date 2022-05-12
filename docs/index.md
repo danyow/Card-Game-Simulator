@@ -11,21 +11,15 @@ playYoutubeId: PriDuaM6MEk
 - Windows via [the Microsoft Store](https://www.microsoft.com/store/apps/9N96N5S4W3J0)
 - Web via [GitHub Pages/Unity WebGL](cgs-webgl.html) *(experimental)*
 
-## How to Play
+## How to Play & How to Create and Share
 
-{% include youtubePlayer.html id=page.playYoutubeId %}
-
-[Keyboard Shortcuts/Hotkeys](keyboard.html)
-
-## How to Create and Share
-
-Tutorial video for how to create and share is coming soon!
+See [the wiki](https://github.com/finol-digital/Card-Game-Simulator/wiki).
 
 [Custom Game - Developer Docs](custom.html)
 
 ## Feedback
 
-See the [current roadmap](roadmap.html). 
+See [the roadmap](roadmap.html). 
 
 Please send any additional feature requests/bug reports/other feedback to <david@finoldigital.com> or join our [Discord](https://discord.gg/MdUHEUJCU4). 
 Please also consider checking out [these projects](external.html).

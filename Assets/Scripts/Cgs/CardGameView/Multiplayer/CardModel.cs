@@ -18,7 +18,7 @@ using UnityExtensionMethods;
 
 namespace Cgs.CardGameView.Multiplayer
 {
-    public class CardModel : CgsNetPlayable, ICardDisplay
+    public class CardModel : CgsNetPlayable, ICardDisplay, ICardDropHandler
     {
         private const float ZoomHoldTime = 1.5f;
         private const float MovementSpeed = 600f;
@@ -135,9 +135,21 @@ namespace Cgs.CardGameView.Multiplayer
 
         protected override void OnStartPlayable()
         {
+            GetComponent<CardDropArea>().DropHandler = this;
+
             var cardSize = new Vector2(CardGameManager.Current.CardSize.X, CardGameManager.Current.CardSize.Y);
             ((RectTransform) transform).sizeDelta = CardGameManager.PixelsPerInch * cardSize;
             gameObject.GetOrAddComponent<BoxCollider2D>().size = CardGameManager.PixelsPerInch * cardSize;
+
+            var targetRotation = Value.GetPropertyValueInt(CardGameManager.Current.CardRotationIdentifier);
+            if (targetRotation == 0)
+                targetRotation = CardGameManager.Current.CardRotationDefault;
+            if (targetRotation != 0)
+            {
+                transform.Rotate(0, 0, targetRotation);
+                if (IsOnline)
+                    RequestUpdateRotation(transform.rotation);
+            }
 
             SetIsNameVisible(!isFacedown);
             if (!isFacedown)
@@ -211,7 +223,8 @@ namespace Cgs.CardGameView.Multiplayer
         protected override void OnPointerEnterPlayable(PointerEventData eventData)
         {
             if (Settings.PreviewOnMouseOver && CardViewer.Instance != null && !CardViewer.Instance.IsVisible
-                && (PlayableViewer.Instance == null || !PlayableViewer.Instance.IsVisible))
+                && (PlayableViewer.Instance == null || !PlayableViewer.Instance.IsVisible)
+                && CurrentDragPhase != DragPhase.Drag && !isFacedown)
                 CardViewer.Instance.Preview(this);
         }
 
@@ -231,6 +244,11 @@ namespace Cgs.CardGameView.Multiplayer
         {
             if (CardViewer.Instance != null && !CardViewer.Instance.Zoom)
                 CardViewer.Instance.IsVisible = false;
+        }
+
+        public void OnDrop(CardModel cardModel)
+        {
+            // TODO: CREATE STACK WITH 2 CARDS
         }
 
         public static CardModel CreateDrag(PointerEventData eventData, GameObject gameObject, Transform transform,
@@ -270,6 +288,9 @@ namespace Cgs.CardGameView.Multiplayer
 
         protected override void OnBeginDragPlayable(PointerEventData eventData)
         {
+            if (CardViewer.Instance != null)
+                CardViewer.Instance.HidePreview();
+
             if (!IsOnline)
                 ActOnDrag();
             else
@@ -495,6 +516,7 @@ namespace Cgs.CardGameView.Multiplayer
 
         private void Discard()
         {
+            ToDiscard = true;
             if (IsOnline)
                 CmdUnspawnCard(false);
             Destroy(gameObject);
